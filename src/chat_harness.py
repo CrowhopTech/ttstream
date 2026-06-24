@@ -1,0 +1,2 @@
+class LLMChatHarness:
+    pass
