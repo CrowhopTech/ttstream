@@ -1,0 +1,5 @@
+asyncio==4.0.0
+cffi==2.0.0
+pycparser==3.0
+redis==8.0.1
+sounddevice==0.5.5
