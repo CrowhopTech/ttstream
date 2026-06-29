@@ -5,6 +5,12 @@ import ollama
 from ollama_text_generator.punctuation_chunker import PunctuationChunker
 from yaspin import yaspin
 from yaspin.spinners import Spinners
+import os
+
+PROMPTS_RELDIR="prompts"
+
+def get_prompts_dir() -> str:
+    return os.path.join(os.path.dirname(os.path.realpath(__file__)), PROMPTS_RELDIR)
 
 async def main():
     parser = argparse.ArgumentParser(prog="ollama_text_generator")
@@ -22,10 +28,18 @@ async def main():
     r = redis.Redis(host=args.redis_address, port=args.redis_port)
     r.delete(args.output_redis_queue_name)
 
+    if args.prompt_text != "":
+        initial_prompt = args.prompt_text
+    else:
+        with open(os.path.join(get_prompts_dir(), args.prompt_file+".txt")) as prompt_file:
+            initial_prompt = prompt_file.read()
+    
+    print(f"Prompting with intial prompt:\n'{initial_prompt}'")
+
     chunker = PunctuationChunker()
     
     with yaspin(text="Waiting for ollama to spit out some text...", spinner=Spinners.sand):
-        response = ollama.chat(args.model, [ollama.Message(role="system", content=args.prompt_text)])
+        response = ollama.chat(args.model, [ollama.Message(role="system", content=initial_prompt)])
         chunked = chunker.chunk_str(response.message.content)
     
     for part in chunked:
