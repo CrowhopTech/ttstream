@@ -3,7 +3,8 @@
 SCRIPT_PATH="$(dirname $0)"
 REQ_PATH="$SCRIPT_PATH/requirements_unified.txt"
 
-echo "# ollama_text_generator"                           > $REQ_PATH
+echo "# Use this file to install requirements for all modules at once (useful for local development)" > $REQ_PATH
+echo "# ollama_text_generator"                          >> $REQ_PATH
 cat $SCRIPT_PATH/ollama_text_generator/requirements.txt >> $REQ_PATH
 echo ""                                                 >> $REQ_PATH
 echo "# qwen_tts_speaker"                               >> $REQ_PATH

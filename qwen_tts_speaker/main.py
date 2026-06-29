@@ -6,6 +6,8 @@ import torch
 import numpy as np
 from faster_qwen3_tts import FasterQwen3TTS
 import sys, os
+from yaspin import yaspin
+from yaspin.spinners import Spinners
 
 EXPECTED_SAMPLE_RATE = 24000
 SAMPLES_RELDIR="audio_samples"
@@ -46,8 +48,8 @@ async def main():
     # TODO: publish audio information such as bitrate to special keys in redis
 
     if args.text != "":
-        print(f"Generating sound for text {args.text}...")
-        result = generate_speech(qwen_model, args.text, args.voice_prompt, args.voice)
+        with yaspin(text=f"Generating sound for text {args.text}...", spinner=Spinners.dotsCircle):
+            result = generate_speech(qwen_model, args.text, args.voice_prompt, args.voice)
         print(f"Pushing bytes for text {args.text} to redis queue {output_queue}...")
         push_bytes_to_queue(result, r, output_queue)
         print(f"Successfully pushed audio for text {args.text} to redis, exiting.")
@@ -57,17 +59,17 @@ async def main():
     # while true, poll latest event from queue. If nothing, wait 500ms and try again. If something, generate speech, feed to redis, loop again
     while True:
         try:
-            raw = r.rpop(input_queue)
-            if raw is None:
-                print("No items to generate speech for... sleeping.")
-                await asyncio.sleep(0.5)
-                continue
+            with yaspin(text="Waiting for text to render to audio...", spinner=Spinners.sand):
+                while True:
+                    raw = r.rpop(input_queue)
+                    if raw is not None:
+                        break
+                    await asyncio.sleep(0.5)
             next_text = raw.decode("UTF-8")
-
-            print(f"Generating sound for text {next_text}...")
-            generated = generate_speech(qwen_model, next_text, args.voice_prompt, args.voice)
-            print(f"Pushing bytes for text {next_text} to redis queue {output_queue}...")
-            push_bytes_to_queue(generated, r, output_queue)
+            
+            with yaspin(text=f"Generating audio for text '{next_text}'...", spinner=Spinners.dotsCircle):
+                generated = generate_speech(qwen_model, next_text, args.voice_prompt, args.voice)
+                push_bytes_to_queue(generated, r, output_queue)
         except KeyboardInterrupt:
             break
 
@@ -76,7 +78,6 @@ def generate_speech(model: FasterQwen3TTS, input: str, voice_prompt: str="", voi
 
     # Generates Tuple[list of wavs (NP arrays, see "dtype" above), sample rate]
     if voice_prompt != "":
-        print(f"Using voice prompt '{voice_prompt}'")
         wavs, sample_rate = model.generate_voice_design(  # type: ignore[return-value]
             text=input,
             instruct=voice_prompt,
@@ -86,11 +87,8 @@ def generate_speech(model: FasterQwen3TTS, input: str, voice_prompt: str="", voi
         samples_dir = get_samples_dir()
         voice_txt = os.path.join(samples_dir, f"{voice}.txt")
         voice_wav = os.path.join(samples_dir, f"{voice}.wav")
-        print(f"Voice txt file: {voice_txt}")
         with open(voice_txt, "r") as ref_text_file:
             loaded_ref_text = ref_text_file.read()
-            print(f"Loaded reference text: {loaded_ref_text}")
-            print(f"Using ref audio file {voice_wav}")
             wavs, sample_rate = model.generate_voice_clone(
                 text=input,
                 ref_text=loaded_ref_text,
@@ -102,8 +100,6 @@ def generate_speech(model: FasterQwen3TTS, input: str, voice_prompt: str="", voi
     return wavs[0]
 
 def push_bytes_to_queue(data: np.ndarray, r: redis.Redis, q: str) -> None:
-    print(f"Type: {data.dtype}")
-    print(f"Shape: {data.shape}")
     r.lpush(q, data.tobytes())
 
 if __name__ == "__main__":

@@ -2,4 +2,5 @@
 **.pyc
 **/__pycache__
 
+ollama_text_generator/prompts
 qwen_tts_speaker/audio_samples

@@ -1,11 +1,12 @@
 import asyncio
 import argparse
 import redis
-import torch
 import sounddevice as sd
 import numpy as np
 from environs import env
 import sys
+from yaspin import yaspin
+from yaspin.spinners import Spinners
 
 async def main():
     env.read_env()
@@ -24,20 +25,20 @@ async def main():
         with open(args.file, "rb") as manual_file:
             sd.play(manual_file.read())
             sys.exit(0)
-
+    
     while True:
         try:
-            next_audio: bytes = r.rpop(input_queue)
-            if next_audio is None:
-                print("No items to play over speaker... sleeping")
-                await asyncio.sleep(0.5)
-                continue
-            
-            print("Got new audio snippet, playing...")
+            with yaspin(text="Waiting for text to play over speaker...", spinner=Spinners.sand):
+                while True:
+                    next_audio: bytes = r.rpop(input_queue)
+                    if next_audio is not None:
+                        break
+                    await asyncio.sleep(0.5)
 
             next_audio_ndarray = np.frombuffer(next_audio, dtype=np.float32)
-            play_audio(next_audio_ndarray)
-            await asyncio.sleep(args.delay) # TODO: add some jitter here so it sounds less predictable
+            with yaspin(text="Playing audio over speaker!", spinner=Spinners.dotsCircle):
+                play_audio(next_audio_ndarray)
+                await asyncio.sleep(args.delay) # TODO: add some jitter here so it sounds less predictable
         except KeyboardInterrupt:
             break
 
