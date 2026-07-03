@@ -5,7 +5,7 @@ import ollama
 from ollama_text_generator.punctuation_chunker import PunctuationChunker
 from yaspin import yaspin
 from yaspin.spinners import Spinners
-import os
+import os, sys
 
 PROMPTS_RELDIR="prompts"
 
@@ -37,14 +37,28 @@ async def main():
     print(f"Prompting with intial prompt:\n'{initial_prompt}'")
 
     chunker = PunctuationChunker()
+
+    last_msg: str = None
     
-    with yaspin(text="Waiting for ollama to spit out some text...", spinner=Spinners.sand):
-        response = ollama.chat(args.model, [ollama.Message(role="system", content=initial_prompt)])
-        chunked = chunker.chunk_str(response.message.content)
-    
-    for part in chunked:
-        print(f"Pushing chat chunk: '{part}'")
-        r.lpush(args.output_redis_queue_name, part)
+    while True:
+        try:
+            chat_history = [
+                ollama.Message(role="system", content=initial_prompt)
+            ]
+            if last_msg is not None:
+                chat_history.append(ollama.Message(role="assistant", content=last_msg))
+                chat_history.append(ollama.Message(role="system", content="Continue."))
+
+            with yaspin(text="Waiting for ollama to spit out some text...", spinner=Spinners.sand):
+                response = ollama.chat(args.model, chat_history)
+                last_msg = response.message.content
+                chunked = chunker.chunk_str(response.message.content)
+            
+            for part in chunked:
+                print(f"Pushing chat chunk: '{part}'")
+                r.lpush(args.output_redis_queue_name, part)
+        except KeyboardInterrupt:
+            sys.exit(0)
 
 
 if __name__ == "__main__":

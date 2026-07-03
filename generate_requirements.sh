@@ -13,3 +13,6 @@ echo ""                                                 >> $REQ_PATH
 echo "# speaker_audio_player"                           >> $REQ_PATH
 cat $SCRIPT_PATH/speaker_audio_player/requirements.txt  >> $REQ_PATH
 echo ""                                                 >> $REQ_PATH
+echo "# file_audio_saver"                               >> $REQ_PATH
+cat $SCRIPT_PATH/file_audio_saver/requirements.txt      >> $REQ_PATH
+echo ""                                                 >> $REQ_PATH

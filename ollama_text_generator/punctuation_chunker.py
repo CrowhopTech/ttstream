@@ -1,7 +1,8 @@
 from typing import Iterable
 
 class PunctuationChunker:
-    MIN_CHARS_PER_CHUNK = 100
+    # MIN_CHARS_PER_CHUNK = 100
+    MIN_CHARS_PER_CHUNK = 9999999999
 
     def chunk_str(self, stream: str) -> Iterable[str]:
         buffer: str = ""
