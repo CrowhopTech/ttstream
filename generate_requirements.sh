@@ -19,3 +19,6 @@ echo ""                                                 >> $REQ_PATH
 echo "# audio_file_injector"                            >> $REQ_PATH
 cat $SCRIPT_PATH/audio_file_injector/requirements.txt   >> $REQ_PATH
 echo ""                                                 >> $REQ_PATH
+echo "# rtp_audio_server"                               >> $REQ_PATH
+cat $SCRIPT_PATH/rtp_audio_server/requirements.txt      >> $REQ_PATH
+echo ""                                                 >> $REQ_PATH
