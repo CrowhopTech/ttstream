@@ -16,3 +16,6 @@ echo ""                                                 >> $REQ_PATH
 echo "# file_audio_saver"                               >> $REQ_PATH
 cat $SCRIPT_PATH/file_audio_saver/requirements.txt      >> $REQ_PATH
 echo ""                                                 >> $REQ_PATH
+echo "# audio_file_injector"                            >> $REQ_PATH
+cat $SCRIPT_PATH/audio_file_injector/requirements.txt   >> $REQ_PATH
+echo ""                                                 >> $REQ_PATH
