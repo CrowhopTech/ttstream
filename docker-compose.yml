@@ -5,13 +5,81 @@ services:
     image: redis:alpine
     ports:
       - "6379:6379"
-    expose:
-      - "6379"
     restart: always
     networks:
       - redis-network
     volumes:
       - redis_data:/data
+
+  icecast:
+    image: libretime/icecast
+    container_name: icecast
+    restart: unless-stopped
+    ports:
+      - "8069:8000"
+    environment:
+      ICECAST_SOURCE_PASSWORD: magicalpasswordofawesome
+      ICECAST_ADMIN_PASSWORD: magicalpasswordofawesome
+      ICECAST_PASSWORD: magicalpasswordofawesome
+      ICECAST_HOSTNAME: "192.168.128.30" # TODO: get this dynamically?
+      ICECAST_MAX_CLIENTS: "100"
+      ICECAST_MAX_SOURCES: "5"
+
+  webpage:
+    image: nginx:1.31.2-alpine
+    ports:
+      - "5000:80"
+    environment: []
+    volumes:
+      - ./static_web_content/index.html:/usr/share/nginx/html/index.html:ro
+  #
+  # ollama_text_generator:
+  #   build:
+  #     context: ./ollama_text_generator
+  #     dockerfile: Dockerfile
+  #   restart: always
+  #   depends_on:
+  #     - redis
+  #   environment:
+  #     - REDIS_ADDRESS=redis
+  #     - REDIS_PORT=6379
+  #   volumes:
+  #     - ./ollama_text_generator/prompts:/app/prompts
+  #   networks:
+  #     - redis-network
+
+  # qwen_tts_speaker:
+  #   build:
+  #     context: ./qwen_tts_speaker
+  #     dockerfile: Dockerfile
+  #   restart: always
+  #   depends_on:
+  #     - redis
+  #   environment:
+  #     - REDIS_ADDRESS=redis
+  #     - REDIS_PORT=6379
+  #     - REDIS_TEXT_INPUT_QUEUE_NAME=generated_text
+  #     - REDIS_AUDIO_OUTPUT_QUEUE_NAME=generated_audio_bytes
+  #     - MAX_GPU_MEMORY_GB=12
+  #   volumes:
+  #     - ./qwen_tts_speaker/audio_samples:/app/audio_samples
+  #   networks:
+  #     - redis-network
+  # speaker_audio_player:
+  #   build:
+  #     context: ./speaker_audio_player
+  #     dockerfile: Dockerfile
+  #   restart: always
+  #   depends_on:
+  #     - redis
+  #   environment:
+  #     - REDIS_ADDRESS=redis
+  #     - REDIS_PORT=6379
+  #     - REDIS_AUDIO_INPUT_QUEUE_NAME=generated_audio_bytes
+  #   volumes:
+  #     - ./speaker_audio_player/audio_samples:/app/audio_samples
+  #   networks:
+  #     - redis-network
 
 volumes:
   redis_data:

@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TTStream Audio</title>
+    <style>
+        :root {
+            --bg: #0d0d0d;
+            --fg: #e8e8e8;
+            --accent: #8b5cf6;
+            --card: #1a1a2e;
+            --border: #2a2a3e;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--fg);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 520px;
+            padding: 2.5rem 2rem;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--accent);
+            letter-spacing: -0.02em;
+            margin-bottom: 0.25rem;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 0.8rem;
+            margin-bottom: 2rem;
+        }
+
+        .player-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        audio {
+            width: 100%;
+            border-radius: 10px;
+            outline: none;
+        }
+
+        .footer {
+            margin-top: 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.72rem;
+            color: #555;
+        }
+
+        .footer .source {
+            color: var(--accent);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>TTStream Audio</h1>
+        <p class="subtitle">Powered by icecast+HLS</p>
+        <div class="player-card">
+            <audio id="player" controls preload="auto" src="http://192.168.128.30:8069/stream.mp3"></audio>
+        </div>
+        <div class="footer">
+            <span>Stream: <span class="source">http://192.168.128.30:8069/stream.mp3</span></span>
+        </div>
+    </div>
+</body>
+
+</html>

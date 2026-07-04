@@ -20,6 +20,7 @@ async def main():
     parser.add_argument("-a", "--redis-address", default="localhost")
     parser.add_argument("-s", "--redis-port", default=6379, type=int)
     parser.add_argument("-o", "--output-redis-queue-name", default="generated_text")
+    parser.add_argument("-q", "--max-queue-length", default=10, type=int)
     args = parser.parse_args()
 
     assert args.model != "", "--model required but not specified"
@@ -42,6 +43,11 @@ async def main():
     
     while True:
         try:
+            if r.llen(args.output_redis_queue_name) >= args.max_queue_length:
+                with yaspin(text=f"Waiting for redis to be below the limit of {args.max_queue_length} items..."):
+                    while r.llen(args.output_redis_queue_name) >= args.max_queue_length:
+                        await asyncio.sleep(1.0)
+
             chat_history = [
                 ollama.Message(role="system", content=initial_prompt)
             ]
@@ -55,7 +61,7 @@ async def main():
                 chunked = chunker.chunk_str(response.message.content)
             
             for part in chunked:
-                print(f"Pushing chat chunk: '{part}'")
+                print(f"Pushing chat chunk ({len(part)} chars): '{part}'")
                 r.lpush(args.output_redis_queue_name, part)
         except KeyboardInterrupt:
             sys.exit(0)
