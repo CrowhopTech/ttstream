@@ -4,8 +4,8 @@ SCRIPT_PATH="$(dirname $0)"
 REQ_PATH="$SCRIPT_PATH/requirements_unified.txt"
 
 echo "# Use this file to install requirements for all modules at once (useful for local development)" > $REQ_PATH
-echo "# ollama_text_generator"                          >> $REQ_PATH
-cat $SCRIPT_PATH/ollama_text_generator/requirements.txt >> $REQ_PATH
+echo "# openai_text_generator"                          >> $REQ_PATH
+cat $SCRIPT_PATH/openai_text_generator/requirements.txt >> $REQ_PATH
 echo ""                                                 >> $REQ_PATH
 echo "# qwen_tts_speaker"                               >> $REQ_PATH
 cat $SCRIPT_PATH/qwen_tts_speaker/requirements.txt      >> $REQ_PATH
@@ -19,6 +19,6 @@ echo ""                                                 >> $REQ_PATH
 echo "# audio_file_injector"                            >> $REQ_PATH
 cat $SCRIPT_PATH/audio_file_injector/requirements.txt   >> $REQ_PATH
 echo ""                                                 >> $REQ_PATH
-echo "# rtp_audio_server"                               >> $REQ_PATH
-cat $SCRIPT_PATH/rtp_audio_server/requirements.txt      >> $REQ_PATH
+echo "# icecast_audio_pusher"                           >> $REQ_PATH
+cat $SCRIPT_PATH/icecast_audio_pusher/requirements.txt  >> $REQ_PATH
 echo ""                                                 >> $REQ_PATH

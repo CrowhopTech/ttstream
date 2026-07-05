@@ -20,14 +20,14 @@ async def main():
     env.read_env()
 
     parser = argparse.ArgumentParser(prog="qwen_tts_speaker")
-    parser.add_argument("-m", "--model", default="")
-    parser.add_argument("-p", "--voice-prompt", default="")
     parser.add_argument("-t", "--text", default="", help="Text to generate to speech instead of fetching from Redis")
-    parser.add_argument("-v", "--voice", default="", help="Which voice sample to use as a source")
+    model = env.str("QWEN_TTS_MODEL")
+    voice = env.str("TTS_VOICE", default="")
+    voice_prompt = env.str("TTS_VOICE_PROMPT", default="")
     redis_address = env.str("REDIS_ADDRESS", default="localhost")
     redis_port = env.int("REDIS_PORT", default=6379)
     input_queue = env.str("REDIS_TEXT_INPUT_QUEUE_NAME", default="generated_text")
-    output_queue = env.str("REDIS_AUDIO_OUTPUT_QUEUE_NAME", default="generated_audio_bytes") # TODO: standardize the format of this output stream
+    output_queue = env.str("REDIS_AUDIO_OUTPUT_QUEUE_NAME", default="generated_audio_bytes") # TODO: standardize and document the format of this output stream
     max_gpu_memory_gb = env.float("MAX_GPU_MEMORY_GB", default=12)
     args = parser.parse_args()
 
@@ -38,10 +38,10 @@ async def main():
     if max_gpu_memory_gb is not None:
         load_kwargs["max_memory"] = {0: f"{max_gpu_memory_gb:.1f}GiB", "cpu": "64GiB"}
     
-    qwen_model: FasterQwen3TTS = FasterQwen3TTS.from_pretrained(args.model)
+    qwen_model: FasterQwen3TTS = FasterQwen3TTS.from_pretrained(model)
 
-    assert args.model != "", "--model required but not specified"
-    assert args.voice != "" or args.voice_prompt != "", "one of --voice or --voice-prompt required but not specified"
+    assert model != "", "--model required but not specified"
+    assert voice != "" or voice_prompt != "", "one of TTS_VOICE or TTS_VOICE_PROMPT required but not specified"
 
     r = redis.Redis(host=redis_address, port=redis_port)
 
@@ -49,7 +49,7 @@ async def main():
 
     if args.text != "":
         with yaspin(text=f"Generating sound for text {args.text}...", spinner=Spinners.dotsCircle):
-            result = generate_speech(qwen_model, args.text, args.voice_prompt, args.voice)
+            result = generate_speech(qwen_model, args.text, voice_prompt, voice)
         print(f"Pushing bytes for text {args.text} to redis queue {output_queue}...")
         push_bytes_to_queue(result, r, output_queue)
         print(f"Successfully pushed audio for text {args.text} to redis, exiting.")
@@ -68,7 +68,7 @@ async def main():
             next_text = raw.decode("UTF-8")
             
             with yaspin(text=f"Generating audio for text '{next_text}'...", spinner=Spinners.dotsCircle):
-                generated = generate_speech(qwen_model, next_text, args.voice_prompt, args.voice)
+                generated = generate_speech(qwen_model, next_text, voice_prompt, voice)
                 push_bytes_to_queue(generated, r, output_queue)
         except KeyboardInterrupt:
             break

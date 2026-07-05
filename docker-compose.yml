@@ -1,15 +1,13 @@
-version: '3.8'
-
 services:
   redis:
+    container_name: redis
     image: redis:alpine
     ports:
       - "6379:6379"
     restart: always
-    networks:
-      - redis-network
-    volumes:
-      - redis_data:/data
+    # Uncomment to enable redis persistence
+    # volumes:
+    #   - redis_data:/data
 
   icecast:
     image: libretime/icecast
@@ -18,71 +16,99 @@ services:
     ports:
       - "8069:8000"
     environment:
-      ICECAST_SOURCE_PASSWORD: magicalpasswordofawesome
-      ICECAST_ADMIN_PASSWORD: magicalpasswordofawesome
-      ICECAST_PASSWORD: magicalpasswordofawesome
-      ICECAST_HOSTNAME: "192.168.128.30" # TODO: get this dynamically?
-      ICECAST_MAX_CLIENTS: "100"
-      ICECAST_MAX_SOURCES: "5"
+      ICECAST_SOURCE_PASSWORD: ${ICECAST_PASSWORD}
+      ICECAST_ADMIN_PASSWORD: ${ICECAST_PASSWORD}
+      ICECAST_PASSWORD: ${ICECAST_PASSWORD}
+      ICECAST_HOSTNAME: "${LOCAL_IP}"
+      ICECAST_MAX_CLIENTS: "5"
+      ICECAST_MAX_SOURCES: "1"
 
   webpage:
     image: nginx:1.31.2-alpine
+    container_name: webpage
     ports:
       - "5000:80"
     environment: []
     volumes:
       - ./static_web_content/index.html:/usr/share/nginx/html/index.html:ro
-  #
-  # ollama_text_generator:
-  #   build:
-  #     context: ./ollama_text_generator
-  #     dockerfile: Dockerfile
-  #   restart: always
-  #   depends_on:
-  #     - redis
-  #   environment:
-  #     - REDIS_ADDRESS=redis
-  #     - REDIS_PORT=6379
-  #   volumes:
-  #     - ./ollama_text_generator/prompts:/app/prompts
-  #   networks:
-  #     - redis-network
 
-  # qwen_tts_speaker:
-  #   build:
-  #     context: ./qwen_tts_speaker
-  #     dockerfile: Dockerfile
-  #   restart: always
-  #   depends_on:
-  #     - redis
-  #   environment:
-  #     - REDIS_ADDRESS=redis
-  #     - REDIS_PORT=6379
-  #     - REDIS_TEXT_INPUT_QUEUE_NAME=generated_text
-  #     - REDIS_AUDIO_OUTPUT_QUEUE_NAME=generated_audio_bytes
-  #     - MAX_GPU_MEMORY_GB=12
-  #   volumes:
-  #     - ./qwen_tts_speaker/audio_samples:/app/audio_samples
-  #   networks:
-  #     - redis-network
-  # speaker_audio_player:
-  #   build:
-  #     context: ./speaker_audio_player
-  #     dockerfile: Dockerfile
-  #   restart: always
-  #   depends_on:
-  #     - redis
-  #   environment:
-  #     - REDIS_ADDRESS=redis
-  #     - REDIS_PORT=6379
-  #     - REDIS_AUDIO_INPUT_QUEUE_NAME=generated_audio_bytes
-  #   volumes:
-  #     - ./speaker_audio_player/audio_samples:/app/audio_samples
-  #   networks:
-  #     - redis-network
+  icecast_audio_pusher:
+    container_name: icecast_audio_pusher
+    build:
+      context: ./icecast_audio_pusher
+      dockerfile: Dockerfile
+    restart: always
+    depends_on:
+      - redis
+      - icecast
+    environment:
+      - REDIS_ADDRESS=redis
+      - REDIS_AUDIO_INPUT_QUEUE_NAME=generated_audio_bytes
+      - ICECAST_ADDRESS=icecast
+      - ICECAST_PORT=8000
+      - ICECAST_PASSWORD=${ICECAST_PASSWORD}
+
+  llama_server:
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda
+    container_name: llama_server
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./model_ggufs:/models
+    command: "--model /models/${OPENAI_MODEL_FILE} --port 8080"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [ gpu ]
+
+  openai_text_generator:
+    container_name: openai_text_generator
+    build:
+      context: ./openai_text_generator
+      dockerfile: Dockerfile
+    restart: always
+    depends_on:
+      - redis
+    environment:
+      - REDIS_ADDRESS=redis
+      - REDIS_PORT=6379
+      - REDIS_TEXT_OUTPUT_QUEUE_NAME=generated_text
+      - PROMPT_FILE=${PROMPT_FILE}
+      - LLAMA_MODEL=${OPENAI_MODEL_FILE}
+      - LLAMA_SERVER=llama_server
+      - LLAMA_PORT=8080
+    volumes:
+      - ./openai_text_generator/prompts:/app/prompts
+
+  qwen_tts_speaker:
+    container_name: qwen_tts_speaker
+    build:
+      context: ./qwen_tts_speaker
+      dockerfile: Dockerfile
+    restart: always
+    depends_on:
+      - redis
+    environment:
+      - REDIS_ADDRESS=redis
+      - REDIS_PORT=6379
+      - REDIS_TEXT_INPUT_QUEUE_NAME=generated_text
+      - REDIS_AUDIO_OUTPUT_QUEUE_NAME=generated_audio_bytes
+      - QWEN_TTS_MODEL=${QWEN_TTS_MODEL}
+      - TTS_VOICE=${TTS_VOICE}
+    volumes:
+      - ./qwen_tts_speaker/audio_samples:/app/audio_samples
+      - hf_cache:/root/.cache/huggingface/hub
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [ gpu ]
 
 volumes:
   redis_data:
-
-networks:
-  redis-network:
+  hf_cache:

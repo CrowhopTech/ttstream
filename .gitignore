@@ -1,6 +1,7 @@
 .venv
 **.pyc
 **/__pycache__
-
-ollama_text_generator/prompts
+.env
+model_ggufs
+openai_text_generator/prompts
 qwen_tts_speaker/audio_samples

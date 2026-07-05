@@ -1,21 +1,18 @@
 # Use this file to install requirements for all modules at once (useful for local development)
-# ollama_text_generator
+# openai_text_generator
 redis==8.0.1
-ollama==0.6.2
 python-dotenv==1.2.2
 yaspin==3.3.0
+openai==2.24.0
+environs==15.0.1
 
 # qwen_tts_speaker
-torch==2.12.1
-torchaudio==2.11.0
-numpy==2.4.6
-qwen-tts==0.1.1
-faster_qwen3_tts
 redis==8.0.1
+numpy==2.2.6
 python-dotenv==1.2.2
 environs==15.0.1
 yaspin==3.3.0
-
+faster_qwen3_tts
 # speaker_audio_player
 redis==8.0.1
 sounddevice==0.5.5
@@ -28,6 +25,16 @@ yaspin==3.3.0
 redis==8.0.1
 sounddevice==0.5.5
 soundfile==0.14.0
+numpy==2.4.6
+python-dotenv==1.2.2
+environs==15.0.1
+yaspin==3.3.0
+
+# audio_file_injector
+redis>=5.0.0
+
+# icecast_audio_pusher
+redis==8.0.1
 numpy==2.4.6
 python-dotenv==1.2.2
 environs==15.0.1

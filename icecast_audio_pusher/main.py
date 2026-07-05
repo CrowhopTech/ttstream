@@ -3,8 +3,6 @@ import argparse
 import redis
 import numpy as np
 from environs import env
-import io
-import sys
 import subprocess
 from yaspin import yaspin
 from yaspin.spinners import Spinners
@@ -13,10 +11,13 @@ async def main():
     env.read_env()
 
     parser = argparse.ArgumentParser(prog="speaker_audio_player")
-    parser.add_argument("-d", "--delay", default=0.5, type=float, help="Time to wait between playing each audio sample")
+    parser.add_argument("-d", "--delay", type=float, default=0.5, help="Time to wait between playing each audio sample")
     redis_address = env.str("REDIS_ADDRESS", default="localhost")
     redis_port = env.int("REDIS_PORT", default=6379)
     input_queue = env.str("REDIS_AUDIO_INPUT_QUEUE_NAME", default="generated_audio_bytes")
+    icecast_address = env.str("ICECAST_ADDRESS", default="localhost")
+    icecast_port = env.str("ICECAST_PORT", default=8069)
+    icecast_pass = env.str("ICECAST_PASSWORD")
     args = parser.parse_args()
 
     r = redis.Redis(host=redis_address, port=redis_port, decode_responses=False)
@@ -26,7 +27,7 @@ async def main():
         "-c:a", "libmp3lame",
         "-b:a", "128k",
         "-content_type", "audio/mpeg",
-        "-f", "mp3", "icecast://source:magicalpasswordofawesome@localhost:8069/stream.mp3"
+        "-f", "mp3", f"icecast://source:{icecast_pass}@{icecast_address}:{icecast_port}/stream.mp3"
     ], stdin=subprocess.PIPE, stdout=None, stderr=None)
 
     has_written_once = False
