@@ -64,6 +64,17 @@ services:
               count: 1
               capabilities: [ gpu ]
 
+  orchestrator:
+    build:
+      context: ./orchestrator
+      dockerfile: Dockerfile
+    container_name: orchestrator
+    restart: unless-stopped
+    ports:
+      - "9999:5000"
+    depends_on:
+      - redis
+
   openai_text_generator:
     container_name: openai_text_generator
     build:

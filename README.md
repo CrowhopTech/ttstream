@@ -36,3 +36,14 @@ The data flows in this order:
     b. Alternatively, you can use the `speaker_audio_player` tool to listen to the queue and play the audio through your speaker instead of through Icecast for more direct debugging
 
 4. This is enough to listen to the stream using VLC, or you can serve `static_web_content` for a website with a simple embedded audio player in it
+
+## Notes
+### Redis Keys + Formats
+* `generated_text`: queue of strings
+  * Pushed into by `openai_text_generator`
+  * Polled by `qwen_tts_speaker`
+* `generated_audio_bytes`: queue of raw binary blobs
+  * Pushed into by `qwen_tts_speaker` or `audio_file_injector`
+  * Polled by `icecast_audio_pusher` or `speaker_audio_player`
+* `openai_text_generator_status`: single str value of the status of the OpenAI text generator
+* `qwen_tts_speaker-status`: single str value of the status of the Qwen TTS speaker

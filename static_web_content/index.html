@@ -77,6 +77,16 @@
         .footer .source {
             color: var(--accent);
         }
+
+        .keepalive-status {
+            font-size: 0.7rem;
+            color: var(--accent);
+            min-height: 1rem;
+        }
+
+        .keepalive-status .active {
+            color: #22c55e;
+        }
     </style>
 </head>
 
@@ -89,8 +99,34 @@
         </div>
         <div class="footer">
             <span>Stream: <span class="source">http://192.168.128.30:8069/stream.mp3</span></span>
+            <span class="keepalive-status"><span class="active">●</span> Keepalive: active</span>
         </div>
     </div>
+
+    <script>
+        // TTStream Audio - Keepalive
+        const ORCHESTRATOR_URL = 'http://192.168.128.30:9999/webpage-keepalive';
+        const KEEPALIVE_INTERVAL = 5000; // 5 seconds
+
+        function pingOrchestrator() {
+            const statusEl = document.querySelector('.keepalive-status .active');
+            if (!statusEl) return;
+
+            fetch(ORCHESTRATOR_URL, { method: "POST" })
+                .then(() => {
+                    statusEl.classList.add('active');
+                })
+                .catch(() => {
+                    statusEl.classList.remove('active');
+                });
+        }
+
+        // Start pinging orchestrator every 5 seconds
+        setInterval(pingOrchestrator, KEEPALIVE_INTERVAL);
+
+        // Initial ping on page load
+        pingOrchestrator();
+    </script>
 </body>
 
 </html>
