@@ -6,12 +6,25 @@ import torch
 import numpy as np
 from faster_qwen3_tts import FasterQwen3TTS
 import sys, os
+import json
 from yaspin import yaspin
 from yaspin.spinners import Spinners
+from datetime import datetime
 
 EXPECTED_SAMPLE_RATE = 24000
 SAMPLES_RELDIR="audio_samples"
 SAMPLES_DIR: str
+
+class QwenTTSSpeakerStatus:
+    def __init__(self, status: str, as_of: datetime=datetime.now()):
+        self.as_of = as_of.timestamp()
+        self.status = status
+    
+    def json(self) -> str:
+        return json.dumps(self.__dict__)
+
+    def __str__(self) -> str:
+        return self.json()
 
 def get_samples_dir() -> str:
     return os.path.join(os.path.dirname(os.path.realpath(__file__)), SAMPLES_RELDIR)
@@ -28,6 +41,7 @@ async def main():
     redis_port = env.int("REDIS_PORT", default=6379)
     input_queue = env.str("REDIS_TEXT_INPUT_QUEUE_NAME", default="generated_text")
     output_queue = env.str("REDIS_AUDIO_OUTPUT_QUEUE_NAME", default="generated_audio_bytes") # TODO: standardize and document the format of this output stream
+    redis_status_output_name = env.str("REDIS_STATUS_OUTPUT_NAME", default="qwen_tts_speaker_status")
     max_gpu_memory_gb = env.float("MAX_GPU_MEMORY_GB", default=12)
     args = parser.parse_args()
 
@@ -36,7 +50,7 @@ async def main():
         "dtype": torch.bfloat16,
     }
     if max_gpu_memory_gb is not None:
-        load_kwargs["max_memory"] = {0: f"{max_gpu_memory_gb:.1f}GiB", "cpu": "64GiB"}
+        load_kwargs["max_memory"] = {0: f"{max_gpu_memory_gb:.1f}GiB", "cpu": "4GiB"}
     
     qwen_model: FasterQwen3TTS = FasterQwen3TTS.from_pretrained(model)
 
@@ -45,20 +59,30 @@ async def main():
 
     r = redis.Redis(host=redis_address, port=redis_port)
 
+    def set_status(new_status: str) -> None:
+        r.set(redis_status_output_name, QwenTTSSpeakerStatus(status=new_status).json())
+    
+    set_status("Starting up...")
+
     # TODO: publish audio information such as bitrate to special keys in redis
 
     if args.text != "":
-        with yaspin(text=f"Generating sound for text {args.text}...", spinner=Spinners.dotsCircle):
+        with yaspin(text=f"Generating audio for text '{args.text}'...", spinner=Spinners.dotsCircle):
             result = generate_speech(qwen_model, args.text, voice_prompt, voice)
         print(f"Pushing bytes for text {args.text} to redis queue {output_queue}...")
         push_bytes_to_queue(result, r, output_queue)
         print(f"Successfully pushed audio for text {args.text} to redis, exiting.")
         sys.exit(0)
 
+    # Preload qwen-tts by generating a tiny chunk of text, to prevent it from trying to provision GPU memory later when it's already
+    # taken up by the giant llama-server model
+    _ = generate_speech(qwen_model, "Warmup", voice_prompt, voice)
+
     # Loop until system interrupt (handle them cleanly):
     # while true, poll latest event from queue. If nothing, wait 500ms and try again. If something, generate speech, feed to redis, loop again
     while True:
         try:
+            set_status("Waiting for text to render to audio...")
             with yaspin(text="Waiting for text to render to audio...", spinner=Spinners.sand):
                 while True:
                     raw = r.rpop(input_queue)
@@ -67,6 +91,7 @@ async def main():
                     await asyncio.sleep(0.5)
             next_text = raw.decode("UTF-8")
             
+            set_status(f"Generating audio for text '{next_text}'...")
             with yaspin(text=f"Generating audio for text '{next_text}'...", spinner=Spinners.dotsCircle):
                 generated = generate_speech(qwen_model, next_text, voice_prompt, voice)
                 push_bytes_to_queue(generated, r, output_queue)

@@ -46,4 +46,4 @@ The data flows in this order:
   * Pushed into by `qwen_tts_speaker` or `audio_file_injector`
   * Polled by `icecast_audio_pusher` or `speaker_audio_player`
 * `openai_text_generator_status`: single str value of the status of the OpenAI text generator
-* `qwen_tts_speaker-status`: single str value of the status of the Qwen TTS speaker
+* `qwen_tts_speaker-ystatus`: single str value of the status of the Qwen TTS speaker
