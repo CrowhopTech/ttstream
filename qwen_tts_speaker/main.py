@@ -42,6 +42,7 @@ async def main():
     input_queue = env.str("REDIS_TEXT_INPUT_QUEUE_NAME", default="generated_text")
     output_queue = env.str("REDIS_AUDIO_OUTPUT_QUEUE_NAME", default="generated_audio_bytes") # TODO: standardize and document the format of this output stream
     redis_status_output_name = env.str("REDIS_STATUS_OUTPUT_NAME", default="qwen_tts_speaker_status")
+    redis_trigger_key_name = env.str("REDIS_TRIGGER_KEY_NAME", default="webpage.keepalive")
     max_gpu_memory_gb = env.float("MAX_GPU_MEMORY_GB", default=12)
     args = parser.parse_args()
 
@@ -82,13 +83,21 @@ async def main():
     # while true, poll latest event from queue. If nothing, wait 500ms and try again. If something, generate speech, feed to redis, loop again
     while True:
         try:
+            if not r.get(redis_trigger_key_name):
+                # Stop generation, clear the queues
+                set_status(f"Waiting for trigger key to be set to true...")
+                print("Clearing generated audio queue")
+                r.delete(output_queue)
+                while r.get(redis_trigger_key_name) == "false":
+                    await asyncio.sleep(1.0)
+
             set_status("Waiting for text to render to audio...")
             with yaspin(text="Waiting for text to render to audio...", spinner=Spinners.sand):
                 while True:
                     raw = r.rpop(input_queue)
                     if raw is not None:
                         break
-                    await asyncio.sleep(0.5)
+                    await asyncio.sleep(0.1)
             next_text = raw.decode("UTF-8")
             
             set_status(f"Generating audio for text '{next_text}'...")

@@ -55,7 +55,7 @@ services:
       - "8080:8080"
     volumes:
       - ./model_ggufs:/models
-    command: "--model /models/${OPENAI_MODEL_FILE} --port 8080 --ctx-size 8192 --flash-attention on --n-gpu-layers 24 --parallel 1"
+    command: "--model /models/${OPENAI_MODEL_FILE} --port 8080 --ctx-size 8192 --flash-attn on --n-gpu-layers 24 --parallel 1"
     deploy:
       resources:
         reservations:
@@ -94,10 +94,10 @@ services:
     volumes:
       - ./openai_text_generator/prompts:/app/prompts
 
-  qwen_tts_speaker:
-    container_name: qwen_tts_speaker
+  elevenlabs_tts_speaker:
+    container_name: elevenlabs_tts_speaker
     build:
-      context: ./qwen_tts_speaker
+      context: ./elevenlabs_tts_speaker
       dockerfile: Dockerfile
     restart: always
     depends_on:
@@ -107,18 +107,35 @@ services:
       - REDIS_PORT=6379
       - REDIS_TEXT_INPUT_QUEUE_NAME=generated_text
       - REDIS_AUDIO_OUTPUT_QUEUE_NAME=generated_audio_bytes
-      - QWEN_TTS_MODEL=${QWEN_TTS_MODEL}
-      - TTS_VOICE=${TTS_VOICE}
+      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
+      - TTS_VOICE_ID=${TTS_VOICE_ID}
     volumes:
       - ./qwen_tts_speaker/audio_samples:/app/audio_samples
-      - hf_cache:/root/.cache/huggingface/hub
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [ gpu ]
+  # qwen_tts_speaker:
+  #   container_name: qwen_tts_speaker
+  #   build:
+  #     context: ./qwen_tts_speaker
+  #     dockerfile: Dockerfile
+  #   restart: always
+  #   depends_on:
+  #     - redis
+  #   environment:
+  #     - REDIS_ADDRESS=redis
+  #     - REDIS_PORT=6379
+  #     - REDIS_TEXT_INPUT_QUEUE_NAME=generated_text
+  #     - REDIS_AUDIO_OUTPUT_QUEUE_NAME=generated_audio_bytes
+  #     - QWEN_TTS_MODEL=${QWEN_TTS_MODEL}
+  #     - TTS_VOICE=${TTS_VOICE}
+  #   volumes:
+  #     - ./qwen_tts_speaker/audio_samples:/app/audio_samples
+  #     - hf_cache:/root/.cache/huggingface/hub
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             count: 1
+  #             capabilities: [ gpu ]
 
 volumes:
   redis_data:

@@ -38,6 +38,7 @@ async def main():
     redis_port = env.int("REDIS_PORT", default=6379)
     output_redis_queue_name = env.str("REDIS_TEXT_OUTPUT_QUEUE_NAME", default="generated_text")
     redis_status_output_name = env.str("REDIS_STATUS_OUTPUT_NAME", default="openai_text_generator_status")
+    redis_trigger_key_name = env.str("REDIS_TRIGGER_KEY_NAME", default="webpage.keepalive")
     parser.add_argument("-q", "--max-queue-length", default=10, type=int)
     args = parser.parse_args()
 
@@ -69,6 +70,18 @@ async def main():
     
     while True:
         try:
+            redis_trigger_val = r.get(redis_trigger_key_name)
+            if redis_trigger_val is None or redis_trigger_val.decode("UTF-8") == "false":
+                # Stop generation, clear the queues
+                set_status(f"Waiting for trigger key to be set to true...")
+                print("Clearing generated text queue")
+                r.delete(output_redis_queue_name)
+                while True:
+                    redis_trigger_val = r.get(redis_trigger_key_name)
+                    if redis_trigger_val is not None and redis_trigger_val.decode("UTF-8") != "false":
+                        break
+                    await asyncio.sleep(1.0)
+            
             if r.llen(output_redis_queue_name) >= args.max_queue_length:
                 set_status(f"Waiting for redis to be below the limit of {args.max_queue_length} items...")
                 with yaspin(text=f"Waiting for redis to be below the limit of {args.max_queue_length} items..."):

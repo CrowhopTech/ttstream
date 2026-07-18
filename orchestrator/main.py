@@ -21,7 +21,9 @@ last_keepalive_time = -1
 
 @app.route("/webpage-keepalive", methods=["POST"])
 def keepalive():
+    global last_keepalive_time
     r.set(KEEPALIVE_KEY, "true")
+    last_keepalive_time = time.time()
     return "ok", 200
 
 
@@ -38,7 +40,6 @@ def webpage_status():
     
     if openai_status:
         openai_status_obj = json.loads(openai_status)
-        print(f"Got OpenAI status object: {openai_status_obj}")
     else:
         openai_status_obj = None
     
@@ -48,7 +49,6 @@ def webpage_status():
     
     if qwen_status:
         qwen_status_obj = json.loads(qwen_status)
-        print(f"Got Qwen TTS status object: {qwen_status_obj}")
     else:
         qwen_status_obj = None
     
@@ -67,6 +67,7 @@ def webpage_status():
 
 
 def _keepalive_monitor():
+    global last_keepalive_time
     while True:
         now = time.time()
         elapsed = now - last_keepalive_time

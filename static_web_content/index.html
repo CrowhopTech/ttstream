@@ -180,7 +180,7 @@
         <h1>TTStream Audio</h1>
         <p class="subtitle">Powered by icecast+HLS</p>
         <div class="player-card">
-            <audio id="player" controls preload="auto" src="http://localhost:8069/stream.mp3"></audio>
+            <audio id="player" controls preload="auto" src="http://192.168.128.30:8069/stream.mp3"></audio>
         </div>
         <div class="section-divider">
             <span class="section-divider-line">Component Status</span>
@@ -198,14 +198,14 @@
             </div>
         </div>
         <div class="footer">
-            <span>Stream: <span class="source">http://localhost:8069/stream.mp3</span></span>
+            <span>Stream: <span class="source">http://192.168.128.30:8069/stream.mp3</span></span>
             <span class="keepalive-status"><span class="active">●</span> Keepalive: active</span>
         </div>
     </div>
 
     <script>
         // TTStream Audio - Keepalive
-        const ORCHESTRATOR_ADDR = 'http://localhost:8888';
+        const ORCHESTRATOR_ADDR = 'http://192.168.128.30:8888';
         const KEEPALIVE_INTERVAL = 1000;
         const STATUS_INTERVAL = 1000;
 

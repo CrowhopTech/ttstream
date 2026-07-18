@@ -11,7 +11,7 @@ async def main():
     env.read_env()
 
     parser = argparse.ArgumentParser(prog="speaker_audio_player")
-    parser.add_argument("-d", "--delay", type=float, default=0.5, help="Time to wait between playing each audio sample")
+    parser.add_argument("-d", "--delay", type=float, default=0.0, help="Time to wait between playing each audio sample")
     redis_address = env.str("REDIS_ADDRESS", default="localhost")
     redis_port = env.int("REDIS_PORT", default=6379)
     input_queue = env.str("REDIS_AUDIO_INPUT_QUEUE_NAME", default="generated_audio_bytes")
