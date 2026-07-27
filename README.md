@@ -19,19 +19,19 @@ TTS_VOICE=<name of voice sample in the qwen_tts_speaker/audio_samples directory,
 All data is pushed through a central Redis instance. The primary reason is that it gives a single easy place to work around for all configuration, regardless of implementation for individual modules.
 
 The data flows in this order:
-1. `openai_text_generator` makes requests to a locally hosted `llama.cpp` server, providing the initial prompt and then simply repeating "Continue." to get more text. Text is pushed to a redis queue `generated_text`.
+1. `openai_text_generator` makes requests to a locally hosted `llama.cpp` server, providing the initial prompt and then simply repeating "Continue." to get more text. Text is pushed to a redis queue `queues:generated_text`.
 
     a. Alternatively, you can push text to the queue with `lpush` if you want to save on the GPU memory for that part
 
     b. Text is additionally passed through a simple chunker to make it into ~200 character sections, but keeping sentences intact. This helps the text-to-speech keep up in real time a little better.
     
-2. `qwen_tts_speaker` continually polls the `generated_text` queue for the next chunk, and when it gets one it will feed it through the `faster_qwen3_tts` library and pipe the resulting audio bytes to the redis `generated_audio_bytes` queue.
+2. `qwen_tts_speaker` continually polls the `queues:generated_text` queue for the next chunk, and when it gets one it will feed it through the `faster_qwen3_tts` library and pipe the resulting audio bytes to the redis `queues:generated_audio_bytes` queue.
 
     a. Alternatively, you can use the `audio_file_injector` package to push an audio file into the queue to bypass the text-to-speech mechanism
 
     b. Voices can either be done using Qwen3's voice design feature, or replicating audio samples in `qwen_tts_speaker/audio_samples`
 
-3. `icecast_audio_pusher` continually polls the `generated_audio_bytes` queue and pushes the bytes it gets into `ffmpeg`, which in turn pushes it to Icecast using its built-in support
+3. `icecast_audio_pusher` continually polls the `queues:generated_audio_bytes` queue and pushes the bytes it gets into `ffmpeg`, which in turn pushes it to Icecast using its built-in support
 
     b. Alternatively, you can use the `speaker_audio_player` tool to listen to the queue and play the audio through your speaker instead of through Icecast for more direct debugging
 
@@ -39,11 +39,12 @@ The data flows in this order:
 
 ## Notes
 ### Redis Keys + Formats
-* `generated_text`: queue of strings
+* `queues:generated_text`: queue of strings
   * Pushed into by `openai_text_generator`
   * Polled by `qwen_tts_speaker`
-* `generated_audio_bytes`: queue of raw binary blobs
+* `queues:generated_audio_bytes`: queue of raw binary blobs
   * Pushed into by `qwen_tts_speaker` or `audio_file_injector`
   * Polled by `icecast_audio_pusher` or `speaker_audio_player`
-* `openai_text_generator_status`: single str value of the status of the OpenAI text generator
-* `qwen_tts_speaker-ystatus`: single str value of the status of the Qwen TTS speaker
+* `statuses:openai_text_generator`: JSON blob of the format {"as_of": str, "status": str}
+* `statuses:qwen_tts_speaker`: JSON blob of the format {"as_of": str, "status": str}
+* `webpage_keepalive`: Updated by the orchestrator while someone has the webpage open

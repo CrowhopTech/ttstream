@@ -35,7 +35,8 @@ def webpage_status():
     now = time.time()
     
     # Check OpenAI text generator status
-    openai_status_key = "openai_text_generator_status"
+    # TODO: don't hardcode these keys, take them by env
+    openai_status_key = "statuses:openai_text_generator"
     openai_status = r.get(openai_status_key)
     
     if openai_status:
@@ -44,7 +45,7 @@ def webpage_status():
         openai_status_obj = None
     
     # Check Qwen TTS speaker status
-    qwen_status_key = "qwen_tts_speaker_status"
+    qwen_status_key = "statuses:qwen_tts_speaker"
     qwen_status = r.get(qwen_status_key)
     
     if qwen_status:

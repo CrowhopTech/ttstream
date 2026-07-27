@@ -46,9 +46,9 @@ async def main():
     voice_id_param = env.str("TTS_VOICE_ID") # TODO: this is going to be passed in by Redis key instead, so we can change voices on the fly. Also add a "wipe the queue" key separate from this, for both audio and text
     redis_address = env.str("REDIS_ADDRESS", default="localhost")
     redis_port = env.int("REDIS_PORT", default=6379)
-    input_queue = env.str("REDIS_TEXT_INPUT_QUEUE_NAME", default="generated_text")
-    output_queue = env.str("REDIS_AUDIO_OUTPUT_QUEUE_NAME", default="generated_audio_bytes")
-    redis_status_output_name = env.str("REDIS_STATUS_OUTPUT_NAME", default="qwen_tts_speaker_status")
+    input_queue = env.str("REDIS_TEXT_INPUT_QUEUE_NAME", default="queues:generated_text")
+    output_queue = env.str("REDIS_AUDIO_OUTPUT_QUEUE_NAME", default="queues:generated_audio_bytes")
+    redis_status_output_name = env.str("REDIS_STATUS_OUTPUT_NAME", default="statuses:qwen_tts_speaker")
     redis_trigger_key_name = env.str("REDIS_TRIGGER_KEY_NAME", default="webpage.keepalive")
     redis_voices_key_name = env.str("REDIS_VOICES_KEY_NAME", default="tts_voices")
     voices_file_path = env.str("VOICES_FILE", default="voices.json")

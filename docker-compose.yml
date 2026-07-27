@@ -43,7 +43,6 @@ services:
       - icecast
     environment:
       - REDIS_ADDRESS=redis
-      - REDIS_AUDIO_INPUT_QUEUE_NAME=generated_audio_bytes
       - ICECAST_ADDRESS=icecast
       - ICECAST_PORT=8000
       - ICECAST_PASSWORD=${ICECAST_PASSWORD}
@@ -86,7 +85,6 @@ services:
     environment:
       - REDIS_ADDRESS=redis
       - REDIS_PORT=6379
-      - REDIS_TEXT_OUTPUT_QUEUE_NAME=generated_text
       - PROMPT_FILE=${PROMPT_FILE}
       - LLAMA_MODEL=${OPENAI_MODEL_FILE}
       - LLAMA_SERVER=llama_server
@@ -105,8 +103,6 @@ services:
     environment:
       - REDIS_ADDRESS=redis
       - REDIS_PORT=6379
-      - REDIS_TEXT_INPUT_QUEUE_NAME=generated_text
-      - REDIS_AUDIO_OUTPUT_QUEUE_NAME=generated_audio_bytes
       - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
       - TTS_VOICE_ID=${TTS_VOICE_ID}
     volumes:
@@ -122,8 +118,6 @@ services:
   #   environment:
   #     - REDIS_ADDRESS=redis
   #     - REDIS_PORT=6379
-  #     - REDIS_TEXT_INPUT_QUEUE_NAME=generated_text
-  #     - REDIS_AUDIO_OUTPUT_QUEUE_NAME=generated_audio_bytes
   #     - QWEN_TTS_MODEL=${QWEN_TTS_MODEL}
   #     - TTS_VOICE=${TTS_VOICE}
   #   volumes:

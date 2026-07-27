@@ -38,9 +38,9 @@ async def main():
     tts_voice_id = env.str("TTS_VOICE_ID")
     redis_address = env.str("REDIS_ADDRESS", default="localhost")
     redis_port = env.int("REDIS_PORT", default=6379)
-    input_queue = env.str("REDIS_TEXT_INPUT_QUEUE_NAME", default="generated_text")
-    output_queue = env.str("REDIS_AUDIO_OUTPUT_QUEUE_NAME", default="generated_audio_bytes") # TODO: standardize and document the format of this output stream
-    redis_status_output_name = env.str("REDIS_STATUS_OUTPUT_NAME", default="qwen_tts_speaker_status")
+    input_queue = env.str("REDIS_TEXT_INPUT_QUEUE_NAME", default="queues:generated_text")
+    output_queue = env.str("REDIS_AUDIO_OUTPUT_QUEUE_NAME", default="queues:generated_audio_bytes") # TODO: standardize and document the format of this output stream
+    redis_status_output_name = env.str("REDIS_STATUS_OUTPUT_NAME", default="statuses:qwen_tts_speaker")
     redis_trigger_key_name = env.str("REDIS_TRIGGER_KEY_NAME", default="webpage.keepalive")
     max_gpu_memory_gb = env.float("MAX_GPU_MEMORY_GB", default=12)
     redis_voices_key_name = env.str("REDIS_VOICES_KEY_NAME", default="tts_voices")
