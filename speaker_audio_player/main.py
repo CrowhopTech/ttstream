@@ -3,10 +3,9 @@ import argparse
 import redis
 import sounddevice as sd
 import numpy as np
-from environs import env
 import sys
-from yaspin import yaspin
-from yaspin.spinners import Spinners
+from environs import env
+from loguru import logger
 
 async def main():
     env.read_env()
@@ -28,17 +27,17 @@ async def main():
     
     while True:
         try:
-            with yaspin(text="Waiting for text to play over speaker...", spinner=Spinners.sand):
-                while True:
-                    next_audio: bytes = r.rpop(input_queue)
-                    if next_audio is not None:
-                        break
-                    await asyncio.sleep(0.5)
+            logger.info("Waiting for text to play over speaker...")
+            while True:
+                next_audio: bytes = r.rpop(input_queue)
+                if next_audio is not None:
+                    break
+                await asyncio.sleep(0.5)
 
             next_audio_ndarray = np.frombuffer(next_audio, dtype=np.float32)
-            with yaspin(text="Playing audio over speaker!", spinner=Spinners.dotsCircle):
-                play_audio(next_audio_ndarray)
-                await asyncio.sleep(args.delay) # TODO: add some jitter here so it sounds less predictable
+            logger.info("Playing audio over speaker!")
+            play_audio(next_audio_ndarray)
+            await asyncio.sleep(args.delay) # TODO: add some jitter here so it sounds less predictable
         except KeyboardInterrupt:
             break
 

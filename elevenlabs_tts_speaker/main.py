@@ -1,13 +1,11 @@
 import asyncio
-import argparse
 import redis
 from environs import env
 import numpy as np
-import sys, os
+import os
 import json
-from yaspin import yaspin
-from yaspin.spinners import Spinners
 from datetime import datetime
+from loguru import logger
 
 from elevenlabs.client import ElevenLabs
 
@@ -57,13 +55,13 @@ async def main():
     assert voice_id_param != "", \
         "TTS_VOICE_ID required but not specified"
 
-    print("Constructing elevenlabs client")
+    logger.debug("Constructing elevenlabs client")
     client = ElevenLabs(api_key=api_key)
-    print("Constructed elevenlabs client")
+    logger.debug("Constructed elevenlabs client")
     r = redis.Redis(host=redis_address, port=redis_port)
 
     def set_status(new_status: str) -> None:
-        print(f"Setting status: {new_status}")
+        logger.info(new_status)
         r.set(redis_status_output_name, TTSSpeakerStatus(status=new_status).json())
 
     set_status("Starting up...")
@@ -73,6 +71,7 @@ async def main():
     with open(voices_file_path) as voices_file:
         parsed_voices = json.load(voices_file)
         r.set(redis_voices_key_name, json.dumps(parsed_voices))
+        logger.debug(f"Loaded voices JSON file: '{json.dumps(parsed_voices)}'")
 
     # Resolve a concrete voice_id ONCE up front, rather than per-utterance.
     # The original script re-ran generate_voice_design()/generate_voice_clone()
@@ -86,11 +85,12 @@ async def main():
     # created in ElevenLabs (cloned, designed, or from their library), just
     # point at it directly and skip cloning/design altogether.
     elevenlabs_voice_id = parsed_voices[voice_id_param]["elevenlabs_voice_id"]
-    print("Resolved voice ID")
 
     # Preload / sanity-check: generate a tiny chunk of text up front so that
     # auth or voice-config errors surface immediately instead of mid-loop.
     _ = generate_speech(client, model, "Warmup", elevenlabs_voice_id)
+
+    logger.info("ElevenLabs TTS speaker is ready")
 
     while True:
         try:
@@ -98,25 +98,23 @@ async def main():
             if redis_trigger_val is None or redis_trigger_val.decode("UTF-8") == "false":
                 # Stop generation, clear the queues
                 set_status(f"Waiting for trigger key to be set to true...")
-                print("Clearing generated audio queue")
+                logger.warning("Clearing generated audio queue")
                 r.delete(output_queue)
                 while r.get(redis_trigger_key_name) == "false":
                     await asyncio.sleep(1.0)
 
             set_status("Waiting for text to render to audio...")
-            with yaspin(text="Waiting for text to render to audio...", spinner=Spinners.sand):
-                while True:
-                    raw = r.rpop(input_queue)
-                    if raw is not None:
-                        break
-                    await asyncio.sleep(0.1)
+            while True:
+                raw = r.rpop(input_queue)
+                if raw is not None:
+                    break
+                await asyncio.sleep(0.1)
             next_text = raw.decode("UTF-8")
 
-            print("Generating audio for text")
             set_status(f"Generating audio for text '{next_text}'...")
-            with yaspin(text=f"Generating audio for text '{next_text}'...", spinner=Spinners.dotsCircle):
-                generated = generate_speech(client, model, next_text, elevenlabs_voice_id)
-                push_bytes_to_queue(generated, r, output_queue)
+            generated = generate_speech(client, model, next_text, elevenlabs_voice_id)
+            push_bytes_to_queue(generated, r, output_queue)
+            logger.info(f"Successfully generated audio for text '{next_text}'")
         except KeyboardInterrupt:
             break
 
@@ -161,14 +159,13 @@ def resolve_voice_id(client: ElevenLabs, voice_id_param: str, voice_prompt: str,
 
 
 def generate_speech(client: ElevenLabs, model: str, input: str, voice_id: str) -> np.ndarray:
-    print("Trying to generate speech...")
     audio_stream = client.text_to_speech.convert(
         voice_id=voice_id,
         model_id=model,
         text=input,
         output_format="pcm_24000",
     )
-    print("Generated speech!")
+    logger.debug("Speech bytes generated, outputting to np buffer...")
     pcm_bytes = b"".join(audio_stream)
     pcm_i16 = np.frombuffer(pcm_bytes, dtype=np.int16)
     return (pcm_i16.astype(OUTPUT_DTYPE)) / _INT16_MAX

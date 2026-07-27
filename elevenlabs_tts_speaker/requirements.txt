@@ -1,6 +1,6 @@
 elevenlabs==2.54.0
 redis==8.0.1
 python-dotenv==1.2.2
-yaspin==3.3.0
 environs==15.0.1
 numpy==2.4.6
+loguru==0.7.3

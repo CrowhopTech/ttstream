@@ -1,15 +1,14 @@
 import asyncio
 import argparse
 import redis
-from environs import env
 import torch
 import numpy as np
-from faster_qwen3_tts import FasterQwen3TTS
 import sys, os
 import json
-from yaspin import yaspin
-from yaspin.spinners import Spinners
+from environs import env
+from faster_qwen3_tts import FasterQwen3TTS
 from datetime import datetime
+from loguru import logger
 
 EXPECTED_SAMPLE_RATE = 24000
 SAMPLES_RELDIR="audio_samples"
@@ -71,6 +70,7 @@ async def main():
     qwen_model: FasterQwen3TTS = FasterQwen3TTS.from_pretrained(model)
 
     def set_status(new_status: str) -> None:
+        logger.info(new_status)
         r.set(redis_status_output_name, QwenTTSSpeakerStatus(status=new_status).json())
     
     set_status("Starting up...")
@@ -78,11 +78,11 @@ async def main():
     # TODO: publish audio information such as bitrate to special keys in redis
 
     if args.text != "":
-        with yaspin(text=f"Generating audio for text '{args.text}'...", spinner=Spinners.dotsCircle):
-            result = generate_speech(qwen_model, args.text, voice=voice_id)
-        print(f"Pushing bytes for text {args.text} to redis queue {output_queue}...")
+        logger.info(f"Generating audio for text '{args.text}'...")
+        result = generate_speech(qwen_model, args.text, voice=voice_id)
+        logger.info(f"Pushing bytes for text {args.text} to redis queue {output_queue}...")
         push_bytes_to_queue(result, r, output_queue)
-        print(f"Successfully pushed audio for text {args.text} to redis, exiting.")
+        logger.info(f"Successfully pushed audio for text {args.text} to redis, exiting.")
         sys.exit(0)
 
     # Preload qwen-tts by generating a tiny chunk of text, to prevent it from trying to provision GPU memory later when it's already
@@ -96,24 +96,24 @@ async def main():
             if not r.get(redis_trigger_key_name):
                 # Stop generation, clear the queues
                 set_status(f"Waiting for trigger key to be set to true...")
-                print("Clearing generated audio queue")
+                logger.warning("Clearing generated audio queue")
                 r.delete(output_queue)
                 while r.get(redis_trigger_key_name) == "false":
                     await asyncio.sleep(1.0)
 
             set_status("Waiting for text to render to audio...")
-            with yaspin(text="Waiting for text to render to audio...", spinner=Spinners.sand):
-                while True:
-                    raw = r.rpop(input_queue)
-                    if raw is not None:
-                        break
-                    await asyncio.sleep(0.1)
+            while True:
+                raw = r.rpop(input_queue)
+                if raw is not None:
+                    break
+                await asyncio.sleep(0.1)
             next_text = raw.decode("UTF-8")
             
             set_status(f"Generating audio for text '{next_text}'...")
-            with yaspin(text=f"Generating audio for text '{next_text}'...", spinner=Spinners.dotsCircle):
-                generated = generate_speech(qwen_model, next_text, voice=voice_id)
-                push_bytes_to_queue(generated, r, output_queue)
+            generated = generate_speech(qwen_model, next_text, voice=voice_id)
+            logger.info(f"Generated {len(generated)} bytes of audio, pushing to queue")
+            push_bytes_to_queue(generated, r, output_queue)
+            logger.info(f"Pushed {len(generated)} bytes of generated audio to queue {output_queue}")
         except KeyboardInterrupt:
             break
 

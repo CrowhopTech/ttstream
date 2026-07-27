@@ -2,10 +2,9 @@ import asyncio
 import argparse
 import redis
 import numpy as np
-from environs import env
 import subprocess
-from yaspin import yaspin
-from yaspin.spinners import Spinners
+from environs import env
+from loguru import logger
 
 async def main():
     env.read_env()
@@ -30,28 +29,28 @@ async def main():
         "-f", "mp3", f"icecast://source:{icecast_pass}@{icecast_address}:{icecast_port}/stream.mp3"
     ], stdin=subprocess.PIPE, stdout=None, stderr=None)
 
+    # Don't add silence the first time we push audio to the stream
     has_written_once = False
 
     while True:
         try:
-            with yaspin(text="Waiting for text to play over speaker...", spinner=Spinners.sand):
-                while True:
-                    next_audio: bytes = r.rpop(input_queue)
-                    if next_audio is not None:
-                        break
-                    
-                    if has_written_once:
-                        silence = construct_silence(0.1, 24000, 1)
-                        play_audio(running_ffmpeg, silence)
+            logger.info("Waiting for audio bytes...")
+            while True:
+                next_audio: bytes = r.rpop(input_queue)
+                if next_audio is not None:
+                    break
+                
+                if has_written_once:
+                    silence = construct_silence(0.1, 24000, 1)
+                    play_audio(running_ffmpeg, silence)
 
-                    await asyncio.sleep(0.5)
+                await asyncio.sleep(0.5)
 
-            print(f"Playing {len(next_audio)} bytes")
+            logger.info(f"Playing {len(next_audio)} bytes to ffmpeg")
             next_audio_ndarray = np.frombuffer(next_audio, dtype=np.float32)
-            with yaspin(text="Playing audio over speaker!", spinner=Spinners.dotsCircle):
-                play_audio(running_ffmpeg, next_audio_ndarray)
-                has_written_once = True
-                await asyncio.sleep(args.delay) # TODO: add some jitter here so it sounds less predictable
+            play_audio(running_ffmpeg, next_audio_ndarray)
+            has_written_once = True
+            await asyncio.sleep(args.delay) # TODO: add some jitter here so it sounds less predictable
         except KeyboardInterrupt:
             break
     

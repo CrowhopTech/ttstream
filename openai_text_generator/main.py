@@ -5,11 +5,10 @@ import redis
 from punctuation_chunker import PunctuationChunker
 import openai
 import json
-from environs import env
-from yaspin import yaspin
-from yaspin.spinners import Spinners
-from datetime import datetime
 import os, sys
+from environs import env
+from datetime import datetime
+from loguru import logger
 
 PROMPTS_RELDIR="prompts"
 
@@ -50,7 +49,7 @@ async def main():
     r = redis.Redis(host=redis_address, port=redis_port)
 
     def set_status(new_status: str) -> None:
-        print(f"Setting status to '{new_status}'")
+        logger.info(new_status)
         r.set(redis_status_output_name, OpenAITextGeneratorStatus(status=new_status).json())
     
     set_status("Starting up...")
@@ -62,7 +61,7 @@ async def main():
         with open(os.path.join(get_prompts_dir(), prompt_file+".txt")) as pf:
             initial_prompt = pf.read()
     
-    print(f"Prompting with intial prompt:\n'{initial_prompt}'")
+    logger.info(f"Prompting with intial prompt:\n'{initial_prompt}'")
 
     chunker = PunctuationChunker()
 
@@ -74,7 +73,7 @@ async def main():
             if redis_trigger_val is None or redis_trigger_val.decode("UTF-8") == "false":
                 # Stop generation, clear the queues
                 set_status(f"Waiting for trigger key to be set to true...")
-                print("Clearing generated text queue")
+                logger.warning("Clearing generated text queue")
                 r.delete(output_redis_queue_name)
                 while True:
                     redis_trigger_val = r.get(redis_trigger_key_name)
@@ -84,9 +83,8 @@ async def main():
             
             if r.llen(output_redis_queue_name) >= args.max_queue_length:
                 set_status(f"Waiting for redis to be below the limit of {args.max_queue_length} items...")
-                with yaspin(text=f"Waiting for redis to be below the limit of {args.max_queue_length} items..."):
-                    while r.llen(output_redis_queue_name) >= args.max_queue_length:
-                        await asyncio.sleep(1.0)
+                while r.llen(output_redis_queue_name) >= args.max_queue_length:
+                    await asyncio.sleep(1.0)
 
             chat_history: List[openai.ChatCompletionMessageParam] = [
                 {"role": "user", "content": initial_prompt}
@@ -96,13 +94,12 @@ async def main():
                 chat_history.append({"role": "user", "content": "Continue."})
 
             set_status("Waiting for the model to spit out some text...")
-            with yaspin(text="Waiting for the model to spit out some text...", spinner=Spinners.sand):
-                response = openai_client.chat.completions.create(messages=chat_history, model=model)
-                last_msg = response.choices[0].message.content
-                chunked = chunker.chunk_str(response.choices[0].message.content)
+            response = openai_client.chat.completions.create(messages=chat_history, model=model)
+            last_msg = response.choices[0].message.content
+            chunked = chunker.chunk_str(response.choices[0].message.content)
             
             for part in chunked:
-                print(f"Pushing chat chunk ({len(part)} chars): '{part}'")
+                logger.info(f"Pushing chat chunk ({len(part)} chars): '{part}'")
                 r.lpush(output_redis_queue_name, part)
         except KeyboardInterrupt:
             set_status("Exiting")

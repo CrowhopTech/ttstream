@@ -6,9 +6,8 @@ import soundfile as sf
 import numpy as np
 from environs import env
 import sys
-from yaspin import yaspin
-from yaspin.spinners import Spinners
 from datetime import datetime
+from loguru import logger
 
 async def main():
     env.read_env()
@@ -30,12 +29,12 @@ async def main():
     
     while True:
         try:
-            with yaspin(text="Waiting for text to save...", spinner=Spinners.sand):
-                while True:
-                    next_audio: bytes = r.rpop(input_queue)
-                    if next_audio is not None:
-                        break
-                    await asyncio.sleep(0.5)
+            logger.info("Waiting for audio bytes to save...")
+            while True:
+                next_audio: bytes = r.rpop(input_queue)
+                if next_audio is not None:
+                    break
+                await asyncio.sleep(0.5)
 
             next_audio_ndarray = np.frombuffer(next_audio, dtype=np.float32)
             sf.write(f"{datetime.now()}.wav", next_audio_ndarray, 24000)
