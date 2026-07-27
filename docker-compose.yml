@@ -110,7 +110,7 @@ services:
       - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
       - TTS_VOICE_ID=${TTS_VOICE_ID}
     volumes:
-      - ./qwen_tts_speaker/audio_samples:/app/audio_samples
+      - ./elevenlabs_tts_speaker/voices.json:/app/voices.json
   # qwen_tts_speaker:
   #   container_name: qwen_tts_speaker
   #   build:

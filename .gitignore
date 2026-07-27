@@ -5,3 +5,4 @@
 model_ggufs
 openai_text_generator/prompts
 qwen_tts_speaker/audio_samples
+elevenlabs_tts_speaker/voices.json

@@ -41,29 +41,38 @@ def get_samples_dir() -> str:
 async def main():
     env.read_env()
 
-    parser = argparse.ArgumentParser(prog="elevenlabs_tts_speaker")
-    parser.add_argument("-t", "--text", default="", help="Text to generate to speech instead of fetching from Redis")
-
     api_key = env.str("ELEVENLABS_API_KEY")
     model = env.str("ELEVENLABS_MODEL", default="eleven_turbo_v2_5")
-    voice_id_param = env.str("TTS_VOICE_ID", default="")
-    voice = env.str("TTS_VOICE", default="")
-    voice_prompt = env.str("TTS_VOICE_PROMPT", default="")
+    voice_id_param = env.str("TTS_VOICE_ID") # TODO: this is going to be passed in by Redis key instead, so we can change voices on the fly. Also add a "wipe the queue" key separate from this, for both audio and text
     redis_address = env.str("REDIS_ADDRESS", default="localhost")
     redis_port = env.int("REDIS_PORT", default=6379)
     input_queue = env.str("REDIS_TEXT_INPUT_QUEUE_NAME", default="generated_text")
     output_queue = env.str("REDIS_AUDIO_OUTPUT_QUEUE_NAME", default="generated_audio_bytes")
     redis_status_output_name = env.str("REDIS_STATUS_OUTPUT_NAME", default="qwen_tts_speaker_status")
     redis_trigger_key_name = env.str("REDIS_TRIGGER_KEY_NAME", default="webpage.keepalive")
-    args = parser.parse_args()
+    redis_voices_key_name = env.str("REDIS_VOICES_KEY_NAME", default="tts_voices")
+    voices_file_path = env.str("VOICES_FILE", default="voices.json")
 
     assert api_key != "", "ELEVENLABS_API_KEY required but not specified"
-    assert voice_id_param != "" or voice != "" or voice_prompt != "", \
-        "one of TTS_VOICE_ID, TTS_VOICE, or TTS_VOICE_PROMPT required but not specified"
+    assert voice_id_param != "", \
+        "TTS_VOICE_ID required but not specified"
 
     print("Constructing elevenlabs client")
     client = ElevenLabs(api_key=api_key)
     print("Constructed elevenlabs client")
+    r = redis.Redis(host=redis_address, port=redis_port)
+
+    def set_status(new_status: str) -> None:
+        print(f"Setting status: {new_status}")
+        r.set(redis_status_output_name, TTSSpeakerStatus(status=new_status).json())
+
+    set_status("Starting up...")
+
+    # Load in the voices.json file, parse it, and put it into a key in redis if valid
+    parsed_voices: dict[str, object]
+    with open(voices_file_path) as voices_file:
+        parsed_voices = json.load(voices_file)
+        r.set(redis_voices_key_name, json.dumps(parsed_voices))
 
     # Resolve a concrete voice_id ONCE up front, rather than per-utterance.
     # The original script re-ran generate_voice_design()/generate_voice_clone()
@@ -76,27 +85,12 @@ async def main():
     # TTS_VOICE_ID takes priority over both: if you already have a voice
     # created in ElevenLabs (cloned, designed, or from their library), just
     # point at it directly and skip cloning/design altogether.
-    voice_id = resolve_voice_id(client, voice_id_param, voice_prompt, voice)
+    elevenlabs_voice_id = parsed_voices[voice_id_param]["elevenlabs_voice_id"]
     print("Resolved voice ID")
-    r = redis.Redis(host=redis_address, port=redis_port)
-
-    def set_status(new_status: str) -> None:
-        print(f"Setting status: {new_status}")
-        r.set(redis_status_output_name, TTSSpeakerStatus(status=new_status).json())
-
-    set_status("Starting up...")
-
-    if args.text != "":
-        with yaspin(text=f"Generating audio for text '{args.text}'...", spinner=Spinners.dotsCircle):
-            result = generate_speech(client, model, args.text, voice_id)
-        print(f"Pushing bytes for text {args.text} to redis queue {output_queue}...")
-        push_bytes_to_queue(result, r, output_queue)
-        print(f"Successfully pushed audio for text {args.text} to redis, exiting.")
-        sys.exit(0)
 
     # Preload / sanity-check: generate a tiny chunk of text up front so that
     # auth or voice-config errors surface immediately instead of mid-loop.
-    _ = generate_speech(client, model, "Warmup", voice_id)
+    _ = generate_speech(client, model, "Warmup", elevenlabs_voice_id)
 
     while True:
         try:
@@ -121,7 +115,7 @@ async def main():
             print("Generating audio for text")
             set_status(f"Generating audio for text '{next_text}'...")
             with yaspin(text=f"Generating audio for text '{next_text}'...", spinner=Spinners.dotsCircle):
-                generated = generate_speech(client, model, next_text, voice_id)
+                generated = generate_speech(client, model, next_text, elevenlabs_voice_id)
                 push_bytes_to_queue(generated, r, output_queue)
         except KeyboardInterrupt:
             break
