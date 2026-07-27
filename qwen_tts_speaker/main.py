@@ -35,8 +35,7 @@ async def main():
     parser = argparse.ArgumentParser(prog="qwen_tts_speaker")
     parser.add_argument("-t", "--text", default="", help="Text to generate to speech instead of fetching from Redis")
     model = env.str("QWEN_TTS_MODEL")
-    voice = env.str("TTS_VOICE", default="")
-    voice_prompt = env.str("TTS_VOICE_PROMPT", default="")
+    tts_voice_id = env.str("TTS_VOICE_ID")
     redis_address = env.str("REDIS_ADDRESS", default="localhost")
     redis_port = env.int("REDIS_PORT", default=6379)
     input_queue = env.str("REDIS_TEXT_INPUT_QUEUE_NAME", default="generated_text")
@@ -44,7 +43,23 @@ async def main():
     redis_status_output_name = env.str("REDIS_STATUS_OUTPUT_NAME", default="qwen_tts_speaker_status")
     redis_trigger_key_name = env.str("REDIS_TRIGGER_KEY_NAME", default="webpage.keepalive")
     max_gpu_memory_gb = env.float("MAX_GPU_MEMORY_GB", default=12)
+    redis_voices_key_name = env.str("REDIS_VOICES_KEY_NAME", default="tts_voices")
+    voices_file_path = env.str("VOICES_FILE", default="voices.json")
     args = parser.parse_args()
+
+    assert model != "", "--model required but not specified"
+    assert tts_voice_id != "", "TTS_VOICE_ID required but not specified"
+
+    r = redis.Redis(host=redis_address, port=redis_port)
+
+    # Load in the voices.json file, parse it, and put it into a key in redis if valid
+    parsed_voices: dict[str, object]
+    with open(voices_file_path) as voices_file:
+        parsed_voices = json.load(voices_file)
+        r.set(redis_voices_key_name, json.dumps(parsed_voices))
+
+    assert tts_voice_id in parsed_voices, f"Voice {tts_voice_id} not found in voices file {voices_file_path}"
+    voice_id = parsed_voices[tts_voice_id]["internal_id"]
 
     load_kwargs: dict[str, object] = {
         "device_map": "cuda:0",
@@ -55,11 +70,6 @@ async def main():
     
     qwen_model: FasterQwen3TTS = FasterQwen3TTS.from_pretrained(model)
 
-    assert model != "", "--model required but not specified"
-    assert voice != "" or voice_prompt != "", "one of TTS_VOICE or TTS_VOICE_PROMPT required but not specified"
-
-    r = redis.Redis(host=redis_address, port=redis_port)
-
     def set_status(new_status: str) -> None:
         r.set(redis_status_output_name, QwenTTSSpeakerStatus(status=new_status).json())
     
@@ -69,7 +79,7 @@ async def main():
 
     if args.text != "":
         with yaspin(text=f"Generating audio for text '{args.text}'...", spinner=Spinners.dotsCircle):
-            result = generate_speech(qwen_model, args.text, voice_prompt, voice)
+            result = generate_speech(qwen_model, args.text, voice=voice_id)
         print(f"Pushing bytes for text {args.text} to redis queue {output_queue}...")
         push_bytes_to_queue(result, r, output_queue)
         print(f"Successfully pushed audio for text {args.text} to redis, exiting.")
@@ -77,7 +87,7 @@ async def main():
 
     # Preload qwen-tts by generating a tiny chunk of text, to prevent it from trying to provision GPU memory later when it's already
     # taken up by the giant llama-server model
-    _ = generate_speech(qwen_model, "Warmup", voice_prompt, voice)
+    _ = generate_speech(qwen_model, "Warmup", voice=voice_id)
 
     # Loop until system interrupt (handle them cleanly):
     # while true, poll latest event from queue. If nothing, wait 500ms and try again. If something, generate speech, feed to redis, loop again
@@ -102,7 +112,7 @@ async def main():
             
             set_status(f"Generating audio for text '{next_text}'...")
             with yaspin(text=f"Generating audio for text '{next_text}'...", spinner=Spinners.dotsCircle):
-                generated = generate_speech(qwen_model, next_text, voice_prompt, voice)
+                generated = generate_speech(qwen_model, next_text, voice=voice_id)
                 push_bytes_to_queue(generated, r, output_queue)
         except KeyboardInterrupt:
             break
