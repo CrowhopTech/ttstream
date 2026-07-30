@@ -40,10 +40,11 @@ async def main():
     input_queue = env.str("REDIS_TEXT_INPUT_QUEUE_NAME", default="queues:generated_text")
     output_queue = env.str("REDIS_AUDIO_OUTPUT_QUEUE_NAME", default="queues:generated_audio_bytes") # TODO: standardize and document the format of this output stream
     redis_status_output_name = env.str("REDIS_STATUS_OUTPUT_NAME", default="statuses:qwen_tts_speaker")
-    redis_trigger_key_name = env.str("REDIS_TRIGGER_KEY_NAME", default="webpage.keepalive")
+    redis_trigger_key_name = env.str("REDIS_TRIGGER_KEY_NAME", default="session:keepalive")
     max_gpu_memory_gb = env.float("MAX_GPU_MEMORY_GB", default=12)
-    redis_voices_key_name = env.str("REDIS_VOICES_KEY_NAME", default="tts_voices")
+    redis_voices_key_name = env.str("REDIS_VOICES_KEY_NAME", default="options:tts_voices")
     voices_file_path = env.str("VOICES_FILE", default="voices.json")
+    # TODO: an "ONLINE_OVERRIDE" variable that will force set the keepalive key to true always
     args = parser.parse_args()
 
     assert model != "", "--model required but not specified"

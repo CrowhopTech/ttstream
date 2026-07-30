@@ -47,4 +47,8 @@ The data flows in this order:
   * Polled by `icecast_audio_pusher` or `speaker_audio_player`
 * `statuses:openai_text_generator`: JSON blob of the format {"as_of": str, "status": str}
 * `statuses:qwen_tts_speaker`: JSON blob of the format {"as_of": str, "status": str}
-* `webpage_keepalive`: Updated by the orchestrator while someone has the webpage open
+* `session:keepalive`: Updated by the orchestrator while someone has the webpage open
+* `session:id`: The shorthand ID of the session (used mainly to tell when it changes)
+* `session:info`: The info (JSON blob) of the current session, such as the voice ID, prompt ID, etc.
+* `options:tts_voices`: A JSON blob of which voices are available to use for TTS
+* `options:prompts`: A JSON blob of which prompts are available

@@ -41,19 +41,18 @@ async def main():
 
     api_key = env.str("ELEVENLABS_API_KEY")
     model = env.str("ELEVENLABS_MODEL", default="eleven_turbo_v2_5")
-    voice_id_param = env.str("TTS_VOICE_ID") # TODO: this is going to be passed in by Redis key instead, so we can change voices on the fly. Also add a "wipe the queue" key separate from this, for both audio and text
     redis_address = env.str("REDIS_ADDRESS", default="localhost")
     redis_port = env.int("REDIS_PORT", default=6379)
-    input_queue = env.str("REDIS_TEXT_INPUT_QUEUE_NAME", default="queues:generated_text")
-    output_queue = env.str("REDIS_AUDIO_OUTPUT_QUEUE_NAME", default="queues:generated_audio_bytes")
-    redis_status_output_name = env.str("REDIS_STATUS_OUTPUT_NAME", default="statuses:qwen_tts_speaker")
-    redis_trigger_key_name = env.str("REDIS_TRIGGER_KEY_NAME", default="webpage.keepalive")
-    redis_voices_key_name = env.str("REDIS_VOICES_KEY_NAME", default="tts_voices")
+    redis_status_output_name = env.str("REDIS_STATUS_OUTPUT_NAME", default="statuses:elevenlabs_tts_speaker")
+    redis_trigger_key_name = env.str("REDIS_TRIGGER_KEY_NAME", default="session:keepalive")
+    redis_session_id_key_name = env.str("REDIS_SESSION_ID_KEY_NAME", default="session:id")
+    redis_session_info_key_name = env.str("REDIS_SESSION_INFO_KEY_NAME", default="session:info")
+    redis_voices_key_name = env.str("REDIS_VOICES_KEY_NAME", default="options:tts_voices")
+    input_queue_base = env.str("REDIS_TEXT_INPUT_QUEUE_NAME", default="queues:generated_text")
+    output_queue_base = env.str("REDIS_AUDIO_OUTPUT_QUEUE_NAME", default="queues:generated_audio_bytes")
     voices_file_path = env.str("VOICES_FILE", default="voices.json")
 
     assert api_key != "", "ELEVENLABS_API_KEY required but not specified"
-    assert voice_id_param != "", \
-        "TTS_VOICE_ID required but not specified"
 
     logger.debug("Constructing elevenlabs client")
     client = ElevenLabs(api_key=api_key)
@@ -64,7 +63,44 @@ async def main():
         logger.info(new_status)
         r.set(redis_status_output_name, TTSSpeakerStatus(status=new_status).json())
 
-    set_status("Starting up...")
+    # Session monitoring: wait for session to be set
+    logger.info("ElevenLabs TTS speaker waiting for session initialization...")
+    while True:
+        session_id = r.get(redis_session_id_key_name)
+        if session_id is not None:
+            logger.info(f"Session initialized: {session_id.decode('UTF-8')}")
+            break
+        logger.debug("Waiting for session to be set...")
+        await asyncio.sleep(1.0)
+
+    # Derive queue names from session ID
+    current_session_id = r.get(redis_session_id_key_name).decode("UTF-8")
+    input_queue = f"{input_queue_base}:{current_session_id}"
+    output_queue = f"{output_queue_base}:{current_session_id}"
+
+    # Delete old queue if session info changed state
+    session_info = r.get(redis_session_info_key_name)
+    session_info_changed_state = True
+    while session_info_changed_state:
+        new_session_info = r.get(redis_session_info_key_name)
+        if new_session_info is None:
+            session_info_changed_state = False
+        else:
+            try:
+                info_dict = json.loads(new_session_info.decode("UTF-8"))
+                if info_dict.get("session_info_change_state", False):
+                    logger.info(f"Session ID changed, deleting old queue: {output_queue}")
+                    r.delete(output_queue)
+                    session_info_changed_state = False
+                else:
+                    session_info_changed_state = False
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                session_info_changed_state = False
+
+    def get_queue(session_id: str) -> str:
+        return f"{output_queue_base}:{session_id}"
+
+    set_status("ElevenLabs TTS speaker is ready")
 
     # Load in the voices.json file, parse it, and put it into a key in redis if valid
     parsed_voices: dict[str, object]
@@ -73,24 +109,32 @@ async def main():
         r.set(redis_voices_key_name, json.dumps(parsed_voices))
         logger.debug(f"Loaded voices JSON file: '{json.dumps(parsed_voices)}'")
 
-    # Resolve a concrete voice_id ONCE up front, rather than per-utterance.
-    # The original script re-ran generate_voice_design()/generate_voice_clone()
-    # (with the reference sample) on every call, which is fine for a local
-    # model but would mean re-cloning or re-designing a voice on every single
-    # line of text here -- slow and wasteful against a hosted API. Instead we
-    # resolve voice_id once (voice cloning or voice design), then reuse it,
-    # which is the ElevenLabs-idiomatic equivalent of "load the voice."
-    #
-    # TTS_VOICE_ID takes priority over both: if you already have a voice
-    # created in ElevenLabs (cloned, designed, or from their library), just
-    # point at it directly and skip cloning/design altogether.
-    elevenlabs_voice_id = parsed_voices[voice_id_param]["elevenlabs_voice_id"]
+    # Fetch voice_id from Redis (session:info) - no hard-coded voice IDs at startup
+    session_info = r.get(redis_session_info_key_name)
+    if session_info is not None:
+        info_dict = json.loads(session_info.decode("UTF-8"))
+        if info_dict.get("voice_id"):
+            elevenlabs_voice_id = info_dict["voice_id"]["elevenlabs_voice_id"]
+        else:
+            # Fallback: use first available voice from voices.json
+            if parsed_voices:
+                first_voice_key = list(parsed_voices.keys())[0]
+                elevenlabs_voice_id = parsed_voices[first_voice_key]["elevenlabs_voice_id"]
+                logger.warning(f"No voice_id in session info, using first available voice: {first_voice_key}")
+            else:
+                raise ValueError("No voices available in voices.json")
+    else:
+        # Fallback: use first available voice from voices.json
+        if parsed_voices:
+            first_voice_key = list(parsed_voices.keys())[0]
+            elevenlabs_voice_id = parsed_voices[first_voice_key]["elevenlabs_voice_id"]
+            logger.warning(f"No session info found, using first available voice: {first_voice_key}")
+        else:
+            raise ValueError("No voices available in voices.json")
 
     # Preload / sanity-check: generate a tiny chunk of text up front so that
     # auth or voice-config errors surface immediately instead of mid-loop.
     _ = generate_speech(client, model, "Warmup", elevenlabs_voice_id)
-
-    logger.info("ElevenLabs TTS speaker is ready")
 
     while True:
         try:
@@ -102,6 +146,21 @@ async def main():
                 r.delete(output_queue)
                 while r.get(redis_trigger_key_name) == "false":
                     await asyncio.sleep(1.0)
+
+                # Re-check session ID after trigger reset
+                current_session_id = r.get(redis_session_id_key_name).decode("UTF-8")
+                input_queue = f"{input_queue_base}:{current_session_id}"
+                output_queue = f"{output_queue_base}:{current_session_id}"
+
+                # Re-fetch voice_id in case session info changed
+                session_info = r.get(redis_session_info_key_name)
+                if session_info is not None:
+                    info_dict = json.loads(session_info.decode("UTF-8"))
+                    if info_dict.get("voice_id"):
+                        elevenlabs_voice_id = info_dict["voice_id"]["elevenlabs_voice_id"]
+                    else:
+                        first_voice_key = list(parsed_voices.keys())[0]
+                        elevenlabs_voice_id = parsed_voices[first_voice_key]["elevenlabs_voice_id"]
 
             set_status("Waiting for text to render to audio...")
             while True:
@@ -119,45 +178,6 @@ async def main():
             break
 
 
-def resolve_voice_id(client: ElevenLabs, voice_id_param: str, voice_prompt: str, voice: str) -> str:
-    """Turn TTS_VOICE_ID / TTS_VOICE_PROMPT / TTS_VOICE into a usable ElevenLabs voice_id.
-
-    - voice_id_param -> already have a voice_id (cloned, designed, or from
-      ElevenLabs' voice library) -- use it as-is, no cloning/design API
-      calls needed. Takes priority if set.
-    - voice_prompt -> ElevenLabs "voice design": describe a voice in words
-      and get a synthesized voice back (analogous to generate_voice_design).
-    - voice -> Instant Voice Cloning from the {voice}.wav sample in
-      audio_samples/ (analogous to generate_voice_clone). The {voice}.txt
-      reference transcript that Qwen3-TTS needs is not required by
-      ElevenLabs' cloning API and is ignored here if present.
-    """
-    if voice_id_param != "":
-        return voice_id_param
-
-    if voice_prompt != "":
-        previews = client.text_to_voice.design(
-            voice_description=voice_prompt,
-            text="This is a preview of the requested voice design.",
-        )
-        generated_voice_id = previews.previews[0].generated_voice_id
-        created = client.text_to_voice.create(
-            voice_name=f"designed-{generated_voice_id[:8]}",
-            voice_description=voice_prompt,
-            generated_voice_id=generated_voice_id,
-        )
-        return created.voice_id
-
-    samples_dir = get_samples_dir()
-    voice_wav = os.path.join(samples_dir, f"{voice}.wav")
-    with open(voice_wav, "rb") as ref_audio_file:
-        created = client.voices.ivc.create(
-            name=voice,
-            files=[ref_audio_file],
-        )
-    return created.voice_id
-
-
 def generate_speech(client: ElevenLabs, model: str, input: str, voice_id: str) -> np.ndarray:
     audio_stream = client.text_to_speech.convert(
         voice_id=voice_id,
@@ -172,7 +192,7 @@ def generate_speech(client: ElevenLabs, model: str, input: str, voice_id: str) -
 
 
 def push_bytes_to_queue(data: np.ndarray, r: redis.Redis, q: str) -> None:
-    r.lpush(q, data.tobytes())
+    r.lpush(q, data.tobytes)
 
 
 if __name__ == "__main__":

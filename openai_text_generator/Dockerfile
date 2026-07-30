@@ -1,10 +1,11 @@
-FROM python:3.12-slim
-
+FROM golang:1.26.4
 WORKDIR /app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY go.mod /app/go.mod
+COPY go.sum /app/go.sum
+RUN go mod download
+COPY *.go ./
+RUN CGO_ENABLED=0 GOOS=linux go build -o /app/openai_text_generator
+RUN chmod +x /app/openai_text_generator
 
-COPY . .
-
-CMD ["python", "-u", "-m", "main"]
+CMD ["/app/openai_text_generator"]
