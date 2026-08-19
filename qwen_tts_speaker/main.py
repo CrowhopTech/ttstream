@@ -37,12 +37,12 @@ async def main():
     tts_voice_id = env.str("TTS_VOICE_ID")
     redis_address = env.str("REDIS_ADDRESS", default="localhost")
     redis_port = env.int("REDIS_PORT", default=6379)
-    input_queue = env.str("REDIS_TEXT_INPUT_QUEUE_NAME", default="queues:generated_text")
-    output_queue = env.str("REDIS_AUDIO_OUTPUT_QUEUE_NAME", default="queues:generated_audio_bytes") # TODO: standardize and document the format of this output stream
-    redis_status_output_name = env.str("REDIS_STATUS_OUTPUT_NAME", default="statuses:qwen_tts_speaker")
-    redis_trigger_key_name = env.str("REDIS_TRIGGER_KEY_NAME", default="session:keepalive")
+    input_queue = env.str("REDIS_KEY_QUEUES_GENERATED_TEXT", default="queues:generated_text")
+    output_queue = env.str("REDIS_KEY_QUEUES_GENERATED_AUDIO_BYTES", default="queues:generated_audio_bytes") # TODO: standardize and document the format of this output stream
+    redis_status_output_name = env.str("REDIS_KEY_STATUSES_QWEN_TTS_SPEAKER", default="statuses:qwen_tts_speaker")
+    redis_trigger_key_name = env.str("REDIS_KEY_SESSION_WEBPAGE_CONNECTED", default="session:webpage_connected")
     max_gpu_memory_gb = env.float("MAX_GPU_MEMORY_GB", default=12)
-    redis_voices_key_name = env.str("REDIS_VOICES_KEY_NAME", default="options:tts_voices")
+    redis_voices_key_name = env.str("REDIS_KEY_OPTIONS_TTS_VOICES", default="options:tts_voices")
     voices_file_path = env.str("VOICES_FILE", default="voices.json")
     # TODO: an "ONLINE_OVERRIDE" variable that will force set the keepalive key to true always
     args = parser.parse_args()

@@ -1,0 +1,438 @@
+{
+  "irVersion": "1.0",
+  "project": "elevenlabs-go",
+  "repository": "https://github.com/plexusone/elevenlabs-go",
+  "versioning": "semver",
+  "commitConvention": "conventional",
+  "maintainers": ["johncwang@gmail.com"],
+  "releases": [
+    {
+      "version": "v0.13.0",
+      "date": "2026-06-21",
+      "highlights": [
+        { "description": "Major SDK restructure: domain-based subpackages for better pkg.go.dev discoverability" },
+        { "description": "Combined services with short accessor names: `client.TTS()`, `client.Voice()`, `client.Content()`" },
+        { "description": "All services moved to dedicated packages: `tts`, `stt`, `voice`, `audio`, `content`, `realtime`, `telephony`, `account`, `agents`" }
+      ],
+      "breaking": [
+        { "description": "Services moved to subpackages - requires import path changes (e.g., `import \"github.com/plexusone/elevenlabs-go/tts\"`)", "commit": "cd8c378" },
+        { "description": "`client.TextToSpeech()` renamed to `client.TTS()` with methods on `tts.Service`", "commit": "bb7e29a" },
+        { "description": "`client.SpeechToText()` renamed to `client.STT()` with methods on `stt.Service`", "commit": "bb7e29a" },
+        { "description": "`client.Voices()` renamed to `client.Voice()` with methods on `voice.Service`", "commit": "bb7e29a" },
+        { "description": "`client.Music()`, `client.Dubbing()`, `client.Projects()` combined into `client.Content()`", "commit": "bb7e29a" },
+        { "description": "`client.AudioIsolation()`, `client.ForcedAlignment()`, `client.SoundEffects()` combined into `client.Audio()`", "commit": "bb7e29a" },
+        { "description": "`client.WebSocketTTS()`, `client.WebSocketSTT()` combined into `client.Realtime()`", "commit": "bb7e29a" },
+        { "description": "`client.Twilio()`, `client.PhoneNumbers()` combined into `client.Telephony()`", "commit": "bb7e29a" },
+        { "description": "`client.User()`, `client.Models()`, `client.History()`, `client.Pronunciation()` combined into `client.Account()`", "commit": "bb7e29a" },
+        { "description": "Conversational AI services combined into `client.Agents()` (agents, conversations, knowledge base, batch calling, analytics, testing)", "commit": "bb7e29a" }
+      ],
+      "added": [
+        { "description": "`tts` package with `Service` combining TextToSpeech, SpeechToSpeech, and TextToDialogue", "commit": "cd8c378", "file": "tts/" },
+        { "description": "`stt` package with `Service` for speech-to-text transcription", "commit": "d1985fa", "file": "stt/" },
+        { "description": "`voice` package with `Service` combining Voices and VoiceDesign", "commit": "f181869", "file": "voice/" },
+        { "description": "`audio` package with `Service` combining AudioIsolation, ForcedAlignment, and SoundEffects", "commit": "adb0afa", "file": "audio/" },
+        { "description": "`content` package with `Service` combining Music, Dubbing, and Projects", "commit": "d3f93b4", "file": "content/" },
+        { "description": "`realtime` package with `Service` combining WebSocketTTS and WebSocketSTT", "commit": "791b9fb", "file": "realtime/" },
+        { "description": "`telephony` package with `Service` combining Twilio and PhoneNumbers", "commit": "ea1edfa", "file": "telephony/" },
+        { "description": "`account` package with `Service` combining User, Models, History, and Pronunciation", "commit": "4bf479d", "file": "account/" },
+        { "description": "`agents` package with `Service` combining Agents, Conversations, KnowledgeBase, BatchCalling, Analytics, and AgentTesting", "commit": "e391d5b", "file": "agents/" }
+      ],
+      "changed": [
+        { "description": "Client service accessors use short names: `TTS()`, `STT()`, `Voice()`, `Audio()`, `Content()`, `Realtime()`, `Telephony()`, `Account()`, `Agents()`", "commit": "bb7e29a", "file": "client.go" },
+        { "description": "Request/response types moved to subpackages (e.g., `tts.Request`, `voice.Voice`, `content.MusicRequest`)", "commit": "bb7e29a" }
+      ],
+      "refactor": [
+        { "description": "Remove old service files from root package after migration to subpackages", "commit": "d1803b9" },
+        { "description": "Update `cmd/elevenlabs`, `examples/`, and `omnivoice/` imports for new package structure", "commit": "a271195" }
+      ],
+      "tests": [
+        { "description": "Update integration tests for v0.13.0 subpackage API", "commit": "1ca88d4" },
+        { "description": "Add unit tests for agents package", "commit": "e391d5b", "file": "agents/agents_test.go" },
+        { "description": "Add integration tests for agents package", "commit": "e391d5b", "file": "agents/integration_test.go" }
+      ],
+      "documentation": [
+        { "description": "Add v0.13.0 release notes with migration guide", "commit": "adae129", "file": "docs/releases/v0.13.0.md" },
+        { "description": "Update all service documentation for v0.13.0 API patterns", "commit": "5c6f337" },
+        { "description": "Add API change notes to service docs (quickstart, twilio, projects, dubbing, music, etc.)", "commit": "5c6f337" }
+      ]
+    },
+    {
+      "version": "v0.12.0",
+      "date": "2026-06-20",
+      "highlights": [
+        { "description": "Comprehensive Conversational AI support with six new services" },
+        { "description": "Agent management with branching, deployment, and traffic splitting" },
+        { "description": "Knowledge Base (RAG) for document management and agent context" }
+      ],
+      "added": [
+        { "description": "`AgentsService` for creating, managing, and deploying conversational AI agents", "commit": "efc9be9", "file": "agents.go" },
+        { "description": "`AgentsService.SimulateConversation()` and `SimulateConversationStream()` for agent testing", "commit": "efc9be9", "file": "agents_simulation.go" },
+        { "description": "Agent branch management: `ListBranches()`, `CreateBranch()`, `UpdateBranch()`, `MergeBranch()`", "commit": "efc9be9", "file": "agents.go" },
+        { "description": "Agent deployment with traffic splitting for A/B testing via `Deploy()`", "commit": "efc9be9", "file": "agents.go" },
+        { "description": "`ConversationsService` for accessing conversation history, transcripts, and audio", "commit": "7d775d2", "file": "conversations.go" },
+        { "description": "`ConversationsService.Search()` for searching conversation transcripts", "commit": "7d775d2", "file": "conversations.go" },
+        { "description": "`ConversationsService.RunAnalysis()` for conversation analysis", "commit": "7d775d2", "file": "conversations.go" },
+        { "description": "`KnowledgeBaseService` for RAG document management (files, text, URLs)", "commit": "dd10e73", "file": "knowledge_base.go" },
+        { "description": "`KnowledgeBaseService.GetChunks()` for retrieving document chunks", "commit": "dd10e73", "file": "knowledge_base.go" },
+        { "description": "`BatchCallingService` for scheduling and managing bulk outbound calls", "commit": "05d92cd", "file": "batch_calling.go" },
+        { "description": "`AnalyticsService.GetLiveCount()` for real-time active conversation count", "commit": "a2c2e34", "file": "analytics.go" },
+        { "description": "`AgentTestingService` for test folder organization and response test management", "commit": "1ac5ff4", "file": "agents_testing.go" },
+        { "description": "Client service accessors: `Agents()`, `Conversations()`, `KnowledgeBase()`, `BatchCalling()`, `Analytics()`, `AgentTesting()`", "commit": "c7348d7", "file": "client.go" }
+      ],
+      "documentation": [
+        { "description": "Conversational AI service documentation for all six new services", "commit": "d7dd5a2" },
+        { "description": "README updated with Conversational AI usage examples", "commit": "d7dd5a2" },
+        { "description": "API coverage documentation updated for new endpoints", "commit": "d7dd5a2" }
+      ],
+      "tests": [
+        { "description": "Unit tests for AgentsService", "commit": "efc9be9", "file": "agents_test.go" },
+        { "description": "Unit tests for ConversationsService", "commit": "7d775d2", "file": "conversations_test.go" },
+        { "description": "Unit tests for KnowledgeBaseService", "commit": "dd10e73", "file": "knowledge_base_test.go" },
+        { "description": "Unit tests for BatchCallingService", "commit": "05d92cd", "file": "batch_calling_test.go" },
+        { "description": "Unit tests for AnalyticsService", "commit": "a2c2e34", "file": "analytics_test.go" },
+        { "description": "Unit tests for AgentTestingService", "commit": "1ac5ff4", "file": "agents_testing_test.go" }
+      ],
+      "dependencies": [
+        { "description": "Bump `github.com/ogen-go/ogen` from 1.20.3 to 1.22.0", "commit": "bed78db" },
+        { "description": "Bump `github.com/plexusone/ogen-tools` from 0.2.1 to 0.3.0", "commit": "42b7d2c" },
+        { "description": "Bump `github.com/plexusone/omnivoice-core` from 0.13.0 to 0.14.0", "commit": "89b9a1e" }
+      ],
+      "build": [
+        { "description": "Bump `actions/checkout` from 6 to 7 in GitHub Actions", "commit": "84b3dcf" }
+      ]
+    },
+    {
+      "version": "v0.11.0",
+      "date": "2026-06-15",
+      "highlights": [
+        { "description": "STT file upload support via handwritten multipart request, bypassing ogen limitations" },
+        { "description": "Updated to latest ElevenLabs OpenAPI specification with new endpoints" },
+        { "description": "Breaking API changes to TranscriptionRequest for cleaner file upload interface" }
+      ],
+      "breaking": [
+        { "description": "`TranscriptionRequest.FileContent` renamed to `FileBytes` with type change from `string` to `[]byte`", "commit": "a9eaf23" },
+        { "description": "`TranscriptionRequest.Filename` renamed to `FileName`", "commit": "a9eaf23" },
+        { "description": "Music composition methods (`Generate`, `GenerateStream`) now return `ErrMusicCompositionUnavailable` due to API schema complexity", "commit": "20cc974" },
+        { "description": "VoiceDesign legacy API (gender/age/accent) deprecated; use `GenerateFromDescription` instead", "commit": "7662c64" }
+      ],
+      "added": [
+        { "description": "STT file upload via handwritten multipart HTTP request, bypassing ogen nullable binary field limitation", "commit": "a9eaf23", "file": "speechtotext.go" },
+        { "description": "`SpeechToTextService.TranscribeFile()` convenience method for transcribing raw audio bytes", "commit": "a9eaf23", "file": "speechtotext.go" },
+        { "description": "`VoiceDesignService.GenerateFromDescription()` for text-based voice design", "commit": "7662c64", "file": "voicedesign.go" },
+        { "description": "OpenAPI spec archive directory (`openapi/archive/`) for tracking API versions used in code generation", "commit": "7da6d18" }
+      ],
+      "changed": [
+        { "description": "Regenerated ogen client from latest ElevenLabs OpenAPI specification", "commit": "c4dbe05" },
+        { "description": "Projects `QualityPreset` now uses typed enum instead of string", "commit": "67ebb4c" },
+        { "description": "Pronunciation `AddRule` updated to use new API types", "commit": "67ebb4c" },
+        { "description": "SoundEffects service updated to use new response types", "commit": "67ebb4c" }
+      ],
+      "fixed": [
+        { "description": "Integer overflow conversion in validation error formatting (gosec G115)", "commit": "6833cd0" },
+        { "description": "Duplicate code in STT provider tests refactored to helper functions", "commit": "6833cd0" }
+      ],
+      "build": [
+        { "description": "Add `ogen-fixformdata` post-processing step to `generate.sh` for form-data encoding fixes", "commit": "be24e30" },
+        { "description": "Update ogen-tools references from `agentplexus` to `plexusone` org", "commit": "be24e30" }
+      ],
+      "documentation": [
+        { "description": "Update all import paths from `agentplexus/go-elevenlabs` to `plexusone/elevenlabs-go`", "commit": "2e47766" },
+        { "description": "Update STT documentation to use new `FileBytes`/`FileName` API", "commit": "2e47766" }
+      ],
+      "tests": [
+        { "description": "Projects List test now skips on 403 for subscription tier-limited API", "commit": "2b825ba" },
+        { "description": "STT provider tests refactored with `newTestProvider()` and `assertTranscriptionResult()` helpers", "commit": "6833cd0" }
+      ],
+      "dependencies": [
+        { "description": "Bump `github.com/plexusone/omnivoice-core` to v0.13.0", "commit": "688ad5b" },
+        { "description": "Bump `github.com/grokify/mogo` from 0.74.3 to 0.74.6", "commit": "a96e0fb" },
+        { "description": "Bump `go.opentelemetry.io/otel/metric` from 1.43.0 to 1.44.0", "commit": "dc4b6a7" }
+      ]
+    },
+    {
+      "version": "v0.10.0",
+      "date": "2026-04-04",
+      "highlights": [
+        { "description": "Agent Experience (AX) integration for intelligent error handling and retry logic" },
+        { "description": "OmniVoice provider enhancements with error classification and automatic retry" },
+        { "description": "New `ax/omnivoice.go` helper functions for seamless OmniVoice-core integration" }
+      ],
+      "added": [
+        { "description": "`omnivoice.Classifier` for ElevenLabs-specific error classification using AX metadata and HTTP status codes", "file": "omnivoice/classifier.go" },
+        { "description": "`omnivoice.DefaultRetryConfig()` and `omnivoice.RetryConfigWithCallback()` for configurable retry behavior", "file": "omnivoice/classifier.go" },
+        { "description": "TTS provider retry logic with exponential backoff, respecting error retryability", "file": "omnivoice/tts/provider.go" },
+        { "description": "`ax.CategoryForCode()` - Maps AX error codes to `resilience.ErrorCategory`", "file": "ax/omnivoice.go" },
+        { "description": "`ax.IsRetryableCode()` - Checks if an AX error code is retryable", "file": "ax/omnivoice.go" },
+        { "description": "`ax.SuggestionForCode()` - Returns helpful recovery suggestions for each error code", "file": "ax/omnivoice.go" },
+        { "description": "`ax.OperationRequiredFields()` - Returns required fields for 10 ElevenLabs operations", "file": "ax/omnivoice.go" },
+        { "description": "`ax.ToErrorInfo()` - Converts AX code to `resilience.ErrorInfo`", "file": "ax/omnivoice.go" },
+        { "description": "`ax.ClassifyHTTPStatus()` - Classifies HTTP status codes to error categories", "file": "ax/omnivoice.go" },
+        { "description": "`ax.AllCategories()` and `ax.CodesByCategory()` for error code discovery", "file": "ax/omnivoice.go" },
+        { "description": "Integration tests with mock API server for retry scenarios", "file": "omnivoice/integration_test.go" },
+        { "description": "Performance benchmarks for error classification and retry decisions", "file": "omnivoice/benchmark_test.go" }
+      ],
+      "changed": [
+        { "description": "TTS provider now automatically retries on transient errors (429, 500, 502, 503) with exponential backoff" },
+        { "description": "TTS provider wraps all errors in `resilience.ProviderError` with classification metadata" },
+        { "description": "Auth errors (401, 403), validation errors (400, 422), and not-found errors (404) are not retried" }
+      ],
+      "dependencies": [
+        { "description": "Requires `github.com/plexusone/omnivoice-core` v0.8.0+ for resilience package" }
+      ],
+      "tests": [
+        { "description": "8 integration tests covering retry scenarios (rate limit, auth, server errors, exhausted retries, context cancellation)" },
+        { "description": "14 benchmarks validating performance targets (<1ms classification, <0.1ms retry decision)" },
+        { "description": "7 classifier unit tests and 17 ax/omnivoice helper tests" }
+      ]
+    },
+    {
+      "version": "v0.9.0",
+      "date": "2026-02-28",
+      "highlights": [
+        { "description": "Organization rename from agentplexus to plexusone with updated module naming convention" }
+      ],
+      "changed": [
+        { "description": "**Breaking**: Module path changed from `github.com/agentplexus/go-elevenlabs` to `github.com/plexusone/elevenlabs-go`", "commit": "cc5299a" }
+      ],
+      "dependencies": [
+        { "description": "Bump `github.com/ogen-go/ogen` from 1.19.0 to 1.20.0", "commit": "f039293" },
+        { "description": "Update to `github.com/plexusone/ogen-tools` v0.2.0 (was agentplexus)", "commit": "cc5299a" },
+        { "description": "Update to `github.com/plexusone/omnivoice-core` v0.5.0 (was agentplexus/omnivoice)", "commit": "cc5299a" }
+      ]
+    },
+    {
+      "version": "v0.8.2",
+      "date": "2026-02-15",
+      "dependencies": [
+        { "description": "Bump `golang.org/x/exp` indirect dependency", "commit": "cd6f8e6" },
+        { "description": "Bump `github.com/grokify/mogo` from 0.73.1 to 0.73.2", "commit": "4ad94f1" },
+        { "description": "Bump `github.com/ogen-go/ogen` from 1.18.0 to 1.19.0", "commit": "747e8ab" },
+        { "description": "Bump `github.com/agentplexus/omnivoice` from 0.4.1 to 0.4.3", "commit": "dede6a1" }
+      ],
+      "fixed": [
+        { "description": "Add nolint directives for gosec false positives", "commit": "d6ae537" }
+      ]
+    },
+    {
+      "version": "v0.8.1",
+      "date": "2026-02-14",
+      "highlights": [
+        { "description": "STT conformance tests for `TranscribeFile` and `TranscribeURL` batch transcription methods" }
+      ],
+      "tests": [
+        { "description": "`TranscribeFile` and `TranscribeURL` conformance tests with Ferris Bueller test audio", "commit": "3f8444d" }
+      ],
+      "dependencies": [
+        { "description": "Bump `github.com/agentplexus/omnivoice` from v0.4.0 to v0.4.1", "commit": "3f8444d" }
+      ]
+    },
+    {
+      "version": "v0.8.0",
+      "date": "2026-02-14",
+      "highlights": [
+        { "description": "New Cobra-based CLI (`elevenlabs`) with `tts` and `ttsscript` subcommands for text-to-speech generation" },
+        { "description": "YAML configuration file support with presets for oratory, podcast, and audiobook styles" }
+      ],
+      "added": [
+        { "description": "Cobra CLI framework with `elevenlabs` command and subcommands", "commit": "6bb1bb9" },
+        { "description": "`elevenlabs tts` command for generating speech from text files with SSML and emotion tag support", "commit": "6bb1bb9" },
+        { "description": "`elevenlabs ttsscript` command migrated from standalone `cmd/ttsscript`", "commit": "6bb1bb9" },
+        { "description": "YAML configuration file support (`--config`) for reusable TTS settings", "commit": "6bb1bb9" },
+        { "description": "Built-in presets (`--preset`): `oratory`, `podcast`, `audiobook` with optimized voice settings", "commit": "6bb1bb9" },
+        { "description": "Config save functionality (`--save-config`) to export current settings to YAML", "commit": "6bb1bb9" },
+        { "description": "Voice settings CLI flags: `--stability`, `--similarity`, `--style`, `--speed`", "commit": "6bb1bb9" },
+        { "description": "Automatic output format detection: `.mp3`, `.wav`, `.opus`, `.raw` based on format parameter", "commit": "6bb1bb9" },
+        { "description": "`ttsconfig` subpackage with `Config` and `VoiceSettings` types for programmatic TTS configuration", "commit": "3137a14" },
+        { "description": "`ttsconfig.Load()` and `ttsconfig.Save()` functions for YAML config file I/O", "commit": "3137a14" },
+        { "description": "`ttsconfig.Oratory()`, `ttsconfig.Podcast()`, `ttsconfig.Audiobook()` preset functions", "commit": "3137a14" },
+        { "description": "`ttsconfig.EstimateCredits()` and `ttsconfig.FormatDuration()` utility functions for credit calculation", "commit": "3137a14" },
+        { "description": "`ttsconfig.StripMarkup()` for removing SSML and emotion tags from text", "commit": "3137a14" },
+        { "description": "`--estimate` flag for credit estimation without calling API (shows words, duration, estimated credits)", "commit": "6bb1bb9" }
+      ],
+      "changed": [
+        { "description": "CLI uses `slog.Logger` for structured logging instead of `fmt.Printf`", "commit": "6bb1bb9" },
+        { "description": "Default TTS model changed to `eleven_v3` for new CLI commands", "commit": "6bb1bb9" },
+        { "description": "Migrated `cmd/ttsscript` standalone CLI to `elevenlabs ttsscript` subcommand", "commit": "f5d5d6f" }
+      ],
+      "removed": [
+        { "description": "Standalone `cmd/ttsscript/main.go` (functionality moved to `elevenlabs ttsscript`)", "commit": "f5d5d6f" }
+      ],
+      "dependencies": [
+        { "description": "Add `github.com/spf13/cobra` v1.10.2 for CLI framework", "commit": "a345867" },
+        { "description": "Add `gopkg.in/yaml.v3` v3.0.1 for YAML config support", "commit": "a345867" }
+      ]
+    },
+    {
+      "version": "v0.7.0",
+      "date": "2026-01-24",
+      "highlights": [
+        { "description": "WebSocket STT API migrated to scribe_v2_realtime with breaking changes to options and message formats" },
+        { "description": "WebSocket TTS stream completion detection via Done() channel for reliable end-of-stream handling" }
+      ],
+      "breaking": [
+        { "description": "`WebSocketSTTOptions` fields renamed: `SampleRate`/`Encoding` replaced with `AudioFormat`, `EnableWordTimestamps` replaced with `IncludeTimestamps`, `EnablePartials` removed (partials always enabled)", "commit": "29ec159" },
+        { "description": "`WebSocketSTTConnection.EndStream()` removed, use `Commit()` instead", "commit": "29ec159" },
+        { "description": "Default model changed from `scribe_v1` to `scribe_v2_realtime`", "commit": "29ec159" }
+      ],
+      "added": [
+        { "description": "`WebSocketSTTOptions.AudioFormat` field for specifying audio encoding (e.g., `pcm_16000`, `ulaw_8000`)", "commit": "29ec159" },
+        { "description": "`WebSocketSTTOptions.IncludeTimestamps` field for word-level timing", "commit": "29ec159" },
+        { "description": "`WebSocketSTTOptions.IncludeLanguageDetection` field for detected language in responses", "commit": "29ec159" },
+        { "description": "`WebSocketSTTOptions.CommitStrategy` field (`manual` or `vad`) for transcript commit control", "commit": "29ec159" },
+        { "description": "VAD (Voice Activity Detection) settings: `VADSilenceThresholdSecs`, `VADThreshold`, `MinSpeechDurationMs`, `MinSilenceDurationMs`", "commit": "29ec159" },
+        { "description": "`WebSocketSTTConnection.Commit()` method for manual transcript commit", "commit": "29ec159" },
+        { "description": "`WebSocketSTTConnection.SendAudioWithCommit()` method for sending audio with optional commit", "commit": "29ec159" },
+        { "description": "`WebSocketSTTConnection.SessionID()` method to retrieve server-assigned session ID", "commit": "29ec159" },
+        { "description": "`WebSocketTTSConnection.Done()` channel for stream completion detection after `Flush()`", "commit": "b4ac98d" },
+        { "description": "OmniVoice TTS and STT provider conformance tests", "commit": "707d6d2" },
+        { "description": "OmniVoice capabilities documentation with interface implementation matrix", "commit": "e3d4815" }
+      ],
+      "changed": [
+        { "description": "WebSocket STT now uses query parameters for configuration instead of init message", "commit": "29ec159" },
+        { "description": "Audio data sent as `input_audio_chunk` message type with `audio_base_64` field", "commit": "29ec159" },
+        { "description": "Response message types: `partial_transcript`, `committed_transcript`, `committed_transcript_with_timestamps`", "commit": "29ec159" },
+        { "description": "OmniVoice conversion utilities updated for new STT options structure", "commit": "29ec159" },
+        { "description": "OmniVoice TTS provider uses `Done()` channel and inactivity timeout for reliable stream completion", "commit": "b4ac98d" },
+        { "description": "OmniVoice TTS `GetVoice()` returns `tts.ErrVoiceNotFound` for invalid voice IDs", "commit": "b4ac98d" }
+      ],
+      "documentation": [
+        { "description": "`TRD_STT.md` technical requirements document for WebSocket STT migration", "commit": "e3d4815" },
+        { "description": "WebSocket TTS stream completion behavior documentation with usage patterns", "commit": "e3d4815" }
+      ],
+      "dependencies": [
+        { "description": "Bump `github.com/agentplexus/omnivoice` from v0.2.0 to v0.3.0", "commit": "29ec159" }
+      ]
+    },
+    {
+      "version": "v0.6.0",
+      "date": "2026-01-19",
+      "highlights": [
+        { "description": "Native telephony audio format support (ulaw, alaw, G.711) for seamless Twilio Media Streams integration" }
+      ],
+      "added": [
+        { "description": "Telephony codec support in OmniVoice format mapping: `ulaw`, `mulaw`, `g711u` -> `ulaw_8000` and `alaw`, `g711a` -> `alaw_8000`", "commit": "4d5cc76" },
+        { "description": "Recognition of `ulaw_`, `alaw_`, `opus_` prefixes as valid ElevenLabs output formats", "commit": "4d5cc76" },
+        { "description": "8kHz PCM output format (`pcm_8000`) for telephony sample rates", "commit": "4d5cc76" }
+      ],
+      "internal": [
+        { "description": "Exclude local `omnivoice/examples/` from version control (examples moved to `agentplexus/omnivoice-examples`)", "commit": "24919bd" }
+      ],
+      "dependencies": [
+        { "description": "Update go.mod dependencies", "commit": "2216d0b" },
+        { "description": "Bump `github.com/grokify/mogo` from 0.72.5 to 0.72.6", "commit": "1f18678" }
+      ],
+      "build": [
+        { "description": "Add `.gitattributes` for `docs/` directory", "commit": "4560e8e" }
+      ]
+    },
+    {
+      "version": "v0.5.0",
+      "date": "2026-01-04",
+      "highlights": [
+        { "description": "OmniVoice provider integration - use ElevenLabs as a drop-in TTS/STT/Agent provider in the OmniVoice voice pipeline framework" }
+      ],
+      "added": [
+        { "description": "OmniVoice TTS provider (`omnivoice/tts`) implementing `tts.Provider` and `tts.StreamingProvider` interfaces", "commit": "8988eff" },
+        { "description": "OmniVoice STT provider (`omnivoice/stt`) implementing `stt.Provider` and `stt.StreamingProvider` interfaces", "commit": "8988eff" },
+        { "description": "OmniVoice Agent provider (`omnivoice/agent`) with session management for conversational AI", "commit": "8988eff" },
+        { "description": "Format conversion utilities for mapping OmniVoice configs to ElevenLabs parameters", "commit": "8988eff" },
+        { "description": "Debug and simple TTS examples (`examples/debug-test`, `examples/simple`)", "commit": "052f358" }
+      ],
+      "documentation": [
+        { "description": "OmniVoice integration guide with TTS, STT, and Agent provider documentation", "commit": "2db36b1" },
+        { "description": "Rebuild MkDocs site with OmniVoice section", "commit": "ba3e3b6" }
+      ],
+      "internal": [
+        { "description": "Migrate to structured-changelog format for machine-readable changelog", "commit": "2b6ac84" }
+      ]
+    },
+    {
+      "version": "v0.4.0",
+      "date": "2025-12-31",
+      "highlights": [
+        { "description": "Null handling fix for API responses, voice settings presets for learning platforms, and PCM-to-WAV audio utilities" }
+      ],
+      "fixed": [
+        { "description": "JSON decoding errors for nullable API response fields using ogen-tools post-processing (`ogen-fixnull`, `ogen-fixerror`)", "commit": "0f8818b" }
+      ],
+      "added": [
+        { "description": "Voice settings presets for learning platforms: Udemy, YouTube, TikTok, podcast, audiobook, and more", "commit": "0f8818b" },
+        { "description": "PCM to WAV audio conversion utilities (`PCMBytesToWAV`, `PCMToWAV`)", "commit": "0f8818b" },
+        { "description": "`ParseAPIError()` function for structured error extraction from API responses", "commit": "0f8818b" },
+        { "description": "`IsForbiddenError()` helper for 403 status code detection", "commit": "0f8818b" },
+        { "description": "Output format validation for TTS requests", "commit": "0f8818b" }
+      ],
+      "documentation": [
+        { "description": "Testing documentation for integration tests", "commit": "0f8818b" },
+        { "description": "Voice settings presets guide for LMS courses", "commit": "0f8818b" }
+      ],
+      "dependencies": [
+        { "description": "Update go.mod dependencies", "commit": "3630597" }
+      ]
+    },
+    {
+      "version": "v0.3.0",
+      "date": "2025-12-28",
+      "highlights": [
+        { "description": "Real-time voice agent capabilities: WebSocket STT/TTS streaming, speech-to-speech conversion, and Twilio phone integration" }
+      ],
+      "added": [
+        { "description": "WebSocket TTS streaming for real-time text-to-speech synthesis", "commit": "8369b63" },
+        { "description": "WebSocket STT streaming for real-time speech-to-text transcription", "commit": "8369b63" },
+        { "description": "Speech-to-speech conversion service for voice transformation", "commit": "8369b63" },
+        { "description": "Twilio phone integration for telephony voice agents", "commit": "8369b63" },
+        { "description": "`cmd/ttsscript` CLI for batch TTS generation from scripts", "commit": "6e30dd2" }
+      ],
+      "changed": [
+        { "description": "Transfer repository to `agentplexus` organization", "commit": "89b67c2" }
+      ],
+      "documentation": [
+        { "description": "WebSocket STT/TTS service documentation", "commit": "8369b63" },
+        { "description": "Speech-to-speech and Twilio integration guides", "commit": "8369b63" },
+        { "description": "Examples with custom `*slog.Logger` for debugging", "commit": "5235e85" }
+      ]
+    },
+    {
+      "version": "v0.2.0",
+      "date": "2025-12-27",
+      "highlights": [
+        { "description": "MkDocs documentation site with comprehensive API reference and guides" }
+      ],
+      "added": [
+        { "description": "MkDocs documentation site with Material theme", "commit": "db015a4" },
+        { "description": "Comprehensive service documentation for all ElevenLabs APIs", "commit": "db015a4" },
+        { "description": "Getting started guides, examples, and utility documentation", "commit": "db015a4" }
+      ],
+      "dependencies": [
+        { "description": "Bump `github.com/grokify/mogo` from 0.72.4 to 0.72.5", "commit": "53993be" }
+      ]
+    },
+    {
+      "version": "v0.1.0",
+      "date": "2025-12-20",
+      "highlights": [
+        { "description": "Initial release - comprehensive Go client for ElevenLabs API with TTS, STT, voice cloning, and audio generation services" }
+      ],
+      "added": [
+        { "description": "Text-to-Speech (TTS) service with streaming support and voice settings", "commit": "3f4eb7f" },
+        { "description": "Speech-to-Text (STT) transcription service", "commit": "3f4eb7f" },
+        { "description": "Voice management: list, get, clone, and design voices", "commit": "3f4eb7f" },
+        { "description": "Voice design service for creating custom AI voices", "commit": "3f4eb7f" },
+        { "description": "Text-to-Dialogue service for multi-speaker conversations", "commit": "3f4eb7f" },
+        { "description": "Sound effects generation service", "commit": "3f4eb7f" },
+        { "description": "Music generation service", "commit": "3f4eb7f" },
+        { "description": "Audio isolation service for removing background noise", "commit": "3f4eb7f" },
+        { "description": "Dubbing service for video localization", "commit": "3f4eb7f" },
+        { "description": "Forced alignment service for audio-text synchronization", "commit": "3f4eb7f" },
+        { "description": "Projects service for managing long-form content", "commit": "3f4eb7f" },
+        { "description": "Pronunciation dictionary service with PLS export", "commit": "3f4eb7f" },
+        { "description": "History service for accessing generated audio", "commit": "3f4eb7f" },
+        { "description": "User and subscription management", "commit": "3f4eb7f" },
+        { "description": "Models service for listing available TTS models", "commit": "3f4eb7f" },
+        { "description": "Retry HTTP client wrapper for resilient API calls", "commit": "3f4eb7f" },
+        { "description": "TTSScript compiler for scripted audio generation", "commit": "3f4eb7f" },
+        { "description": "Premade voices package with voice metadata and filtering", "commit": "3f4eb7f" }
+      ]
+    }
+  ]
+}

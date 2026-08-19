@@ -47,8 +47,30 @@ The data flows in this order:
   * Polled by `icecast_audio_pusher` or `speaker_audio_player`
 * `statuses:openai_text_generator`: JSON blob of the format {"as_of": str, "status": str}
 * `statuses:qwen_tts_speaker`: JSON blob of the format {"as_of": str, "status": str}
-* `session:keepalive`: Updated by the orchestrator while someone has the webpage open
+* `session:webpage_connected`: Updated by the orchestrator while someone has the webpage open
 * `session:id`: The shorthand ID of the session (used mainly to tell when it changes)
 * `session:info`: The info (JSON blob) of the current session, such as the voice ID, prompt ID, etc.
 * `options:tts_voices`: A JSON blob of which voices are available to use for TTS
 * `options:prompts`: A JSON blob of which prompts are available
+### Env Variables for Redis Keys
+Every Redis key listed above can be overridden per-process via an environment variable. The variable name mirrors the key it overrides:
+
+**Convention:** `REDIS_KEY_<NAMESPACE>_<NAME>` maps to the Redis key `<namespace>:<name>` (uppercased, `:` replaced with `_`).
+
+For example, the Redis key `statuses:qwen_tts_speaker` is overridden by the env var `REDIS_KEY_STATUSES_QWEN_TTS_SPEAKER`. Every process that reads or writes that key uses the same env var name, and the default value (if unset) is the literal Redis key.
+
+| Redis key                           | Env variable                                  |
+| ----------------------------------- | --------------------------------------------- |
+| `queues:generated_text`             | `REDIS_KEY_QUEUES_GENERATED_TEXT`             |
+| `queues:generated_audio_bytes`      | `REDIS_KEY_QUEUES_GENERATED_AUDIO_BYTES`      |
+| `statuses:openai_text_generator`    | `REDIS_KEY_STATUSES_OPENAI_TEXT_GENERATOR`    |
+| `statuses:qwen_tts_speaker`         | `REDIS_KEY_STATUSES_QWEN_TTS_SPEAKER`         |
+| `statuses:elevenlabs_tts_speaker`   | `REDIS_KEY_STATUSES_ELEVENLABS_TTS_SPEAKER`   |
+| `session:webpage_connected`         | `REDIS_KEY_SESSION_WEBPAGE_CONNECTED`         |
+| `session:id`                        | `REDIS_KEY_SESSION_ID`                        |
+| `session:info`                      | `REDIS_KEY_SESSION_INFO`                      |
+| `session:last_heartbeat`            | `REDIS_KEY_SESSION_LAST_HEARTBEAT`            |
+| `options:tts_voices`                | `REDIS_KEY_OPTIONS_TTS_VOICES`                |
+| `options:prompts`                   | `REDIS_KEY_OPTIONS_PROMPTS`                   |
+
+Redis connection settings use the conventional names `REDIS_ADDRESS` and `REDIS_PORT` — these aren't keys, so they don't follow the `REDIS_KEY_*` convention.

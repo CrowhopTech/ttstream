@@ -1,0 +1,46 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+/elevenlabs
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Go workspace file
+go.work
+go.work.sum
+
+# MkDocs build output
+site/
+
+# Dependency directories
+vendor/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Output files from examples
+*.mp3
+*.wav
+*.pcm
+
+# Environment files
+.env
+.env.local
+.envrc
+
+# Local examples (see agentplexus/omnivoice-examples for published examples)
+omnivoice/examples/
+
+# Claude Code local settings
+.claude/settings.local.json

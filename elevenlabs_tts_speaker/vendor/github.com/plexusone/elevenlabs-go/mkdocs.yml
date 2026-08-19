@@ -1,0 +1,132 @@
+site_name: elevenlabs-go
+site_description: Go SDK for ElevenLabs AI Audio API
+site_author: PlexusOne
+site_url: https://plexusone.github.io/elevenlabs-go/
+
+repo_name: plexusone/elevenlabs-go
+repo_url: https://github.com/plexusone/elevenlabs-go
+
+theme:
+  name: material
+  custom_dir: docs/overrides
+  palette:
+    # Dark mode first (PlexusOne default)
+    - scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+    - scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+  features:
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.highlight
+    - content.code.copy
+
+extra_css:
+  - https://plexusone.dev/css/plexusone-mkdocs.css
+
+plugins:
+  - search
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - admonition
+  - pymdownx.details
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Installation: getting-started/installation.md
+    - Quick Start: getting-started/quickstart.md
+    - Configuration: getting-started/configuration.md
+  - CLI:
+    - Overview: cli/index.md
+    - tts: cli/tts.md
+    - ttsscript: cli/ttsscript.md
+    - Configuration: cli/configuration.md
+  - Services:
+    - Text-to-Speech: services/text-to-speech.md
+    - Speech-to-Text: services/speech-to-text.md
+    - Speech-to-Speech: services/speech-to-speech.md
+    - Voices: services/voices.md
+    - Voice Design: services/voice-design.md
+    - Sound Effects: services/sound-effects.md
+    - Music: services/music.md
+    - Audio Isolation: services/audio-isolation.md
+    - Forced Alignment: services/forced-alignment.md
+    - Text-to-Dialogue: services/text-to-dialogue.md
+    - Projects (Studio): services/projects.md
+    - Pronunciation: services/pronunciation.md
+    - Dubbing: services/dubbing.md
+    - History: services/history.md
+    - Models: services/models.md
+    - User: services/user.md
+  - Real-Time:
+    - WebSocket TTS: services/websocket-tts.md
+    - WebSocket STT: services/websocket-stt.md
+    - Twilio Integration: services/twilio.md
+  - Conversational AI:
+    - Agents: services/agents.md
+    - Conversations: services/conversations.md
+    - Knowledge Base: services/knowledge-base.md
+    - Batch Calling: services/batch-calling.md
+    - Agent Testing: services/agent-testing.md
+    - Analytics: services/analytics.md
+  - OmniVoice:
+    - Overview: omnivoice/index.md
+    - Capabilities: omnivoice/capabilities.md
+    - TTS Provider: omnivoice/tts.md
+    - STT Provider: omnivoice/stt.md
+    - Agent Provider: omnivoice/agent.md
+  - Guides:
+    - LMS/Udemy Courses: guides/lms-courses.md
+    - Pronunciation Rules: guides/pronunciation-rules.md
+    - TTS Script Authoring: guides/ttsscript.md
+  - Utilities:
+    - Voice Settings Presets: utilities/voicesettings.md
+    - Voice Reference: utilities/voices.md
+    - TTS Config Package: utilities/ttsconfig.md
+    - TTS Script Package: utilities/ttsscript.md
+    - Retry HTTP Transport: utilities/retryhttp.md
+  - API Reference:
+    - Client: api/client.md
+    - Errors: api/errors.md
+    - AX Package: api/ax.md
+    - Coverage: api/coverage.md
+  - Case Studies:
+    - AX Integration: case-studies/ax-integration.md
+  - Contributing:
+    - Testing: contributing/testing.md
+  - Releases:
+    - v0.13.0: releases/v0.13.0.md
+    - v0.12.0: releases/v0.12.0.md
+    - v0.11.0: releases/v0.11.0.md
+    - v0.10.0: releases/v0.10.0.md
+    - v0.9.0: releases/v0.9.0.md
+    - v0.8.1: releases/v0.8.1.md
+    - v0.8.0: releases/v0.8.0.md
+    - v0.7.0: releases/v0.7.0.md
+    - v0.6.0: releases/v0.6.0.md
+    - v0.5.0: releases/v0.5.0.md
+    - v0.4.0: releases/v0.4.0.md
+    - v0.3.0: releases/v0.3.0.md
+    - v0.2.0: releases/v0.2.0.md
+    - v0.1.0: releases/v0.1.0.md
+  - Examples: examples.md

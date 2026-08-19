@@ -1,0 +1,11 @@
+with-expecter: true
+disable-version-string: true
+packages:
+  github.com/CrowhopTech/ttstream/openai_text_generator:
+    interfaces:
+      redisClient:
+        config:
+          filename: "mock_redis_client_test.go"
+          dir: "."
+          mockname: "MockRedisClient"
+          outpkg: "main"

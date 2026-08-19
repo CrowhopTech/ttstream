@@ -1,0 +1,23 @@
+:root {
+  --bg: #0d0d0d;
+  --fg: #e8e8e8;
+  --accent: #8b5cf6;
+  --card: #1a1a2e;
+  --border: #2a2a3e;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

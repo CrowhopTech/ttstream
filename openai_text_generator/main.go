@@ -13,11 +13,23 @@ import (
 	"github.com/matryer/resync"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
-	"github.com/redis/go-redis/v9"
+	redispkg "github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog/log"
 )
 
 const PROMPTS_RELDIR = "prompts"
+
+// redisClient is the subset of *redis.Client the openai text generator uses,
+// kept as an interface so tests can swap in a mock. *redis.Client satisfies
+// this implicitly.
+type redisClient interface {
+	Get(ctx context.Context, key string) *redispkg.StringCmd
+	Set(ctx context.Context, key string, value any, expiration time.Duration) *redispkg.StatusCmd
+	Exists(ctx context.Context, keys ...string) *redispkg.IntCmd
+	Del(ctx context.Context, keys ...string) *redispkg.IntCmd
+	LLen(ctx context.Context, key string) *redispkg.IntCmd
+	LPush(ctx context.Context, key string, values ...any) *redispkg.IntCmd
+}
 
 type config struct {
 	Model                 string `env:"LLAMA_MODEL"`
@@ -25,12 +37,12 @@ type config struct {
 	LlamaPort             int    `env:"LLAMA_PORT" envDefault:"8080"`
 	RedisAddress          string `env:"REDIS_ADDRESS" envDefault:"localhost"`
 	RedisPort             int    `env:"REDIS_PORT" envDefault:"6379"`
-	RedisStatusOutputName string `env:"REDIS_STATUS_OUTPUT_NAME" envDefault:"statuses:openai_text_generator"`
-	RedisTriggerKeyName   string `env:"REDIS_TRIGGER_KEY_NAME" envDefault:"session:keepalive"`
-	RedisPromptsKeyName   string `env:"REDIS_PROMPTS_KEY_NAME" envDefault:"options:prompts"`
-	SessionIDKey          string `env:"REDIS_SESSION_ID_KEY" envDefault:"session:id"`
-	SessionInfoKey        string `env:"REDIS_SESSION_INFO_KEY" envDefault:"session:info"`
-	OutputQueueNamePrefix string `env:"REDIS_OUTPUT_QUEUE_NAME_PREFIX" envDefault:"queues:generated_text"`
+	RedisStatusOutputName string `env:"REDIS_KEY_STATUSES_OPENAI_TEXT_GENERATOR" envDefault:"statuses:openai_text_generator"`
+	RedisTriggerKeyName   string `env:"REDIS_KEY_SESSION_WEBPAGE_CONNECTED" envDefault:"session:webpage_connected"`
+	RedisPromptsKeyName   string `env:"REDIS_KEY_OPTIONS_PROMPTS" envDefault:"options:prompts"`
+	SessionIDKey          string `env:"REDIS_KEY_SESSION_ID" envDefault:"session:id"`
+	SessionInfoKey        string `env:"REDIS_KEY_SESSION_INFO" envDefault:"session:info"`
+	OutputQueueNamePrefix string `env:"REDIS_KEY_QUEUES_GENERATED_TEXT" envDefault:"queues:generated_text"`
 	MaxQueueLength        int    `env:"MAX_QUEUE_LENGTH" envDefault:"10"`
 }
 
@@ -88,19 +100,21 @@ func (p *PunctuationChunker) ChunkString(inputText string) []string {
 	return chunks
 }
 
-func setStatus(ctx context.Context, r *redis.Client, cfg *config, newStatus string) {
+func setStatus(ctx context.Context, redis redisClient, cfg *config, newStatus string) {
 	log.Info().Msg(newStatus)
 	serialized, err := json.Marshal(OpenAITextGeneratorStatus{status: newStatus, asOf: time.Now().Unix()})
 	if err != nil {
 		panic(fmt.Sprintf("Failed to marshal JSON in setStatus: %+v", err))
 	}
-	err = r.Set(ctx, cfg.RedisStatusOutputName, serialized, 0).Err()
+	err = redis.Set(ctx, cfg.RedisStatusOutputName, serialized, 0).Err()
 	if err != nil {
 		panic(fmt.Sprintf("Failed to set status in Redis: %+v", err))
 	}
 }
 
-func getPromptsDir() string {
+// getPromptsDir returns the directory containing prompt .txt files.
+// It's a package-level var so tests can swap it to point at a temp dir.
+var getPromptsDir = func() string {
 	ex, err := os.Executable()
 	if err != nil {
 		panic(fmt.Sprintf("Failed to get Executable path: %s", err.Error()))
@@ -109,7 +123,7 @@ func getPromptsDir() string {
 	return path.Join(path.Dir(ex), PROMPTS_RELDIR)
 }
 
-func loadPromptsToRedis(ctx context.Context, r *redis.Client, cfg *config) ([]string, error) {
+func loadPromptsToRedis(ctx context.Context, redis redisClient, cfg *config) ([]string, error) {
 	promptsDir := getPromptsDir()
 	promptFiles := []string{}
 
@@ -128,19 +142,19 @@ func loadPromptsToRedis(ctx context.Context, r *redis.Client, cfg *config) ([]st
 		return nil, fmt.Errorf("failed to marshal prompts to JSON: %w", err)
 	}
 	if len(promptFiles) > 0 {
-		r.Set(ctx, cfg.RedisPromptsKeyName, exported, 0)
+		redis.Set(ctx, cfg.RedisPromptsKeyName, exported, 0)
 	} else {
-		r.Set(ctx, cfg.RedisPromptsKeyName, "[]", 0)
+		redis.Set(ctx, cfg.RedisPromptsKeyName, "[]", 0)
 	}
 	return promptFiles, nil
 
 }
 
-func waitForSessionInit(ctx context.Context, r *redis.Client, cfg *config) error {
+func waitForSessionInit(ctx context.Context, redis redisClient, cfg *config) error {
 	log.Info().Msg("Waiting for session to be initialized...")
 	timer := time.NewTimer(time.Second)
 	for true {
-		existsInt, err := r.Exists(ctx, cfg.SessionIDKey).Result()
+		existsInt, err := redis.Exists(ctx, cfg.SessionIDKey).Result()
 		if err != nil {
 			return fmt.Errorf("failed to check if key '%s' exists: %w", cfg.SessionIDKey, err)
 		}
@@ -164,8 +178,8 @@ func getOutputQueueName(cfg *config, sessionID string) string {
 	return fmt.Sprintf("%s:%s", cfg.OutputQueueNamePrefix, sessionID)
 }
 
-func getSessionIDAndInfo(ctx context.Context, r *redis.Client, cfg *config) (string, SessionInfo, error) {
-	sessionID, err := r.Get(ctx, cfg.SessionIDKey).Result()
+func getSessionIDAndInfo(ctx context.Context, redis redisClient, cfg *config) (string, SessionInfo, error) {
+	sessionID, err := redis.Get(ctx, cfg.SessionIDKey).Result()
 	if err != nil {
 		return "", SessionInfo{}, fmt.Errorf("failed to get session ID from key '%s': %w", cfg.SessionIDKey, err)
 	}
@@ -173,7 +187,7 @@ func getSessionIDAndInfo(ctx context.Context, r *redis.Client, cfg *config) (str
 		return "", SessionInfo{}, fmt.Errorf("session ID at key '%s' is empty", cfg.SessionIDKey)
 	}
 
-	infoRaw, err := r.Get(ctx, cfg.SessionInfoKey).Result()
+	infoRaw, err := redis.Get(ctx, cfg.SessionInfoKey).Result()
 	if err != nil {
 		return "", SessionInfo{}, fmt.Errorf("failed to get session info from key '%s': %w", cfg.SessionInfoKey, err)
 	}
@@ -196,13 +210,11 @@ func loadPromptText(promptID string) (string, error) {
 	return string(contents), nil
 }
 
-func main() {
-	ctx := context.Background()
-
+func constructClients() (*config, *openai.Client, *redispkg.Client, *PunctuationChunker, error) {
 	var cfg config
-	err := env.Parse(&cfg)
+	err := env.Parse(cfg)
 	if err != nil {
-		log.Panic().Msgf("Failed to parse env config: %+v", err)
+		return nil, nil, nil, nil, fmt.Errorf("failed to parse env config: %+v", err)
 	}
 
 	openAIClient := openai.NewClient(
@@ -210,26 +222,39 @@ func main() {
 		option.WithAPIKey(""),
 	)
 
-	redisClient := redis.NewClient(&redis.Options{
+	return &cfg, &openAIClient, redispkg.NewClient(&redispkg.Options{
 		Addr:     fmt.Sprintf("%s:%d", cfg.RedisAddress, cfg.RedisPort),
 		Password: "",
 		DB:       0, // Default DB
-	})
+	}), NewPunctuationChunker(100), nil
+}
 
-	chunker := NewPunctuationChunker(100)
-
-	setStatus(ctx, redisClient, &cfg, "Starting up...")
-	err = redisClient.Del(ctx, cfg.RedisPromptsKeyName).Err()
+func initialSetup(ctx context.Context, cfg *config, redis redisClient) error {
+	err := redis.Del(ctx, cfg.RedisPromptsKeyName).Err()
 	if err != nil {
 		log.Panic().Err(err).Msgf("Failed to wipe Redis key '%s'", cfg.RedisPromptsKeyName)
 	}
 
-	_, err = loadPromptsToRedis(ctx, redisClient, &cfg)
+	return nil
+}
+
+func main() {
+	ctx := context.Background()
+
+	cfg, openAIClient, redis, chunker, err := constructClients()
+	if err != nil {
+		log.Panic().Err(err).Msg("Failed to initialize clients")
+		return
+	}
+
+	setStatus(ctx, redis, cfg, "Starting up...")
+
+	_, err = loadPromptsToRedis(ctx, redis, cfg)
 	if err != nil {
 		log.Panic().Err(err).Msg("Failed to load prompts to Redis")
 	}
 
-	err = waitForSessionInit(ctx, redisClient, &cfg)
+	err = waitForSessionInit(ctx, redis, cfg)
 	if err != nil {
 		log.Panic().Err(err).Msg("Failed to wait for session info to be initialized in Redis")
 	}
@@ -246,7 +271,7 @@ func main() {
 	for true {
 		time.Sleep(time.Second)
 
-		latestSessionID, latestSessionInfo, err := getSessionIDAndInfo(ctx, redisClient, &cfg)
+		latestSessionID, latestSessionInfo, err := getSessionIDAndInfo(ctx, redis, cfg)
 		if err != nil {
 			log.Err(err).Msg("Failed to get latest session info from Redis")
 			continue
@@ -254,12 +279,12 @@ func main() {
 
 		if currentSessionID != latestSessionID {
 			log.Info().Msgf("Session ID changed from '%s' to '%s': clearing outdated queue '%s' and reloading", currentSessionID, currentQueueName, latestSessionID)
-			if err := redisClient.Del(ctx, currentQueueName).Err(); err != nil {
+			if err := redis.Del(ctx, currentQueueName).Err(); err != nil {
 				log.Err(err).Msgf("Failed to delete queue '%s' while changing sessions", currentQueueName)
 				continue
 			}
 			currentSessionID, currentSessionInfo = latestSessionID, latestSessionInfo
-			currentQueueName = getOutputQueueName(&cfg, currentSessionID)
+			currentQueueName = getOutputQueueName(cfg, currentSessionID)
 			currentPromptText, err = loadPromptText(currentSessionInfo.PromptID)
 			if err != nil {
 				log.Err(err).Msgf("Failed to load text for prompt ID '%s'", currentSessionInfo.PromptID)
@@ -269,27 +294,27 @@ func main() {
 			log.Info().Msgf("Now outputting to queue '%s'", currentQueueName)
 		}
 
-		currentQueueLen, err := redisClient.LLen(ctx, currentQueueName).Result()
+		currentQueueLen, err := redis.LLen(ctx, currentQueueName).Result()
 		if err != nil {
 			log.Err(err).Msgf("Failed to check length of current queue '%s'", currentQueueName)
 			continue
 		}
 		if currentQueueLen >= int64(cfg.MaxQueueLength) {
 			queueLenSetStatus.Do(func() {
-				setStatus(ctx, redisClient, &cfg, fmt.Sprintf("Waiting for queue to be below length %d (currently %d)", cfg.MaxQueueLength, currentQueueLen))
+				setStatus(ctx, redis, cfg, fmt.Sprintf("Waiting for queue to be below length %d (currently %d)", cfg.MaxQueueLength, currentQueueLen))
 			})
 			continue
 		}
 		queueLenSetStatus.Reset()
 
-		triggerVal, err := redisClient.Get(ctx, cfg.RedisTriggerKeyName).Result()
-		if err != nil && err != redis.Nil {
+		triggerVal, err := redis.Get(ctx, cfg.RedisTriggerKeyName).Result()
+		if err != nil && err != redispkg.Nil {
 			log.Err(err).Msgf("Failed to check trigger value at Redis key '%s'", cfg.RedisTriggerKeyName)
 			continue
 		}
-		if err == redis.Nil || triggerVal == "" || triggerVal == "false" {
+		if err == redispkg.Nil || triggerVal == "" || triggerVal == "false" {
 			triggerSetStatus.Do(func() {
-				setStatus(ctx, redisClient, &cfg, fmt.Sprintf("Waiting for trigger key '%s' to be set to true...", cfg.RedisTriggerKeyName))
+				setStatus(ctx, redis, cfg, fmt.Sprintf("Waiting for trigger key '%s' to be set to true...", cfg.RedisTriggerKeyName))
 
 			})
 			continue
@@ -306,7 +331,7 @@ func main() {
 			)
 		}
 
-		setStatus(ctx, redisClient, &cfg, "Waiting for the model to spit out some text...")
+		setStatus(ctx, redis, cfg, "Waiting for the model to spit out some text...")
 		completion, err := openAIClient.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
 			Messages: chatHistory,
 			Model:    cfg.Model,
@@ -320,7 +345,7 @@ func main() {
 
 		for _, chunk := range chunked {
 			log.Info().Msgf("Pushing chat chunk (%d chars): '%s'", len(chunk), chunk)
-			if err = redisClient.LPush(ctx, currentQueueName, chunk).Err(); err != nil {
+			if err = redis.LPush(ctx, currentQueueName, chunk).Err(); err != nil {
 				log.Err(err).Msgf("Failed to push last chat chunk to Redis queue '%s'", currentQueueName)
 				continue
 			}

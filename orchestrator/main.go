@@ -3,9 +3,13 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net"
 	"net/http"
-	"sync"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/caarlos0/env/v11"
@@ -13,67 +17,10 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// config holds application configuration from environment variables
-type config struct {
-	/// Redis
-	// Connection info
-	RedisAddress string `env:"REDIS_ADDRESS" envDefault:"redis"`
-	RedisPort    int    `env:"REDIS_PORT" envDefault:"6379"`
-	// Keys
-	RedisStatusOutputName string `env:"REDIS_STATUS_OUTPUT_NAME" envDefault:"statuses:openai_text_generator"`
-	RedisTriggerKeyName   string `env:"REDIS_TRIGGER_KEY_NAME" envDefault:"session:keepalive"`
-	WebpageKeepaliveKey   string `env:"WEBPAGE_KEEPALIVE_KEY" envDefault:"session:keepalive"`
-	SessionIDKey          string `env:"SESSION_ID_KEY" envDefault:"session:id"`
-	SessionInfoKey        string `env:"SESSION_INFO_KEY" envDefault:"session:info"`
-	QwenTTSSpeakerKey     string `env:"QWEN_TTS_SPEAKER_STATUS_KEY" envDefault:"statuses:qwen_tts_speaker"`
-	OutputQueueNamePrefix string `env:"REDIS_OUTPUT_QUEUE_NAME_PREFIX" envDefault:"queues:generated_text"`
-	TTSVoiceOptionsKey    string `env:"TTS_VOICE_OPTIONS_KEY" envDefault:"options:tts_voices`
-	PromptOptionsKey      string `env:"PROMPT_OPTIONS_KEY" envDefault:"options:prompts`
-
-	KeepaliveTTL int `env:"KEEPALIVE_TTL_SECONDS" envDefault:"5"`
-}
-
-// OpenAITextGeneratorStatus represents the status of the OpenAI text generator
-type OpenAITextGeneratorStatus struct {
-	Status string `json:"status"`
-	AsOf   int64  `json:"as_of"`
-}
-
-// QwenTTSSpeakerStatus represents the status of the Qwen TTS speaker
-type QwenTTSSpeakerStatus struct {
-	Status string `json:"status"`
-	AsOf   int64  `json:"as_of"`
-}
-
-// SessionInfo holds information about the current session
-type SessionInfo struct {
-	AsOf     int64  `json:"as_of"`
-	VoiceID  string `json:"voice_id"`
-	PromptID string `json:"prompt_id"`
-}
-
-// SpeechOptions holds voice and prompt options
-type SpeechOptions struct {
-	Voices  []string `json:"voices,omitempty"`
-	Prompts []string `json:"prompts,omitempty"`
-}
-
-// StatusResponse holds the combined status response
-type StatusResponse struct {
-	OpenAITextGeneratorStatus OpenAITextGeneratorStatus `json:"openai_text_generator_status"`
-	QwenTTSSpeakerStatus      QwenTTSSpeakerStatus      `json:"qwen_tts_speaker_status"`
-}
-
-// Server holds server state
-type Server struct {
-	mu            sync.RWMutex
-	redisClient   *redis.Client
-	lastKeepalive time.Time
-	keepaliveKey  string
-	ticker        *time.Ticker
-	canceled      chan struct{}
-	cfg           *config
-}
+// jsonMarshal is used for marshalling values that will be written to Redis.
+// It's a package-level var so tests can swap it to force a marshal failure,
+// which is otherwise unreachable given the current struct shapes.
+var jsonMarshal = json.Marshal
 
 // NewServer creates a new server instance
 func NewServer(cfg *config) (*Server, error) {
@@ -83,57 +30,83 @@ func NewServer(cfg *config) (*Server, error) {
 			Password: "",
 			DB:       0,
 		}),
-		keepaliveKey:  cfg.WebpageKeepaliveKey,
-		lastKeepalive: time.Unix(0, 0),
-		ticker:        time.NewTicker(time.Second),
-		canceled:      make(chan struct{}),
-		cfg:           cfg,
+		keepaliveKey:         cfg.WebpageKeepaliveKey,
+		keepaliveCheckTicker: time.NewTicker(time.Second),
+		canceled:             make(chan struct{}),
+		cfg:                  cfg,
 	}
 
 	return s, nil
 }
 
-// startKeepaliveMonitor starts the keepalive monitor thread
-func (s *Server) startKeepaliveMonitor(ctx context.Context, ttl int) {
+// startKeepaliveMonitor starts the keepalive monitor thread. It exits when ctx is canceled.
+func (s *Server) startKeepaliveMonitor(ctx context.Context, ttl time.Duration) {
+	s.wg.Add(1)
 	go func() {
-		ticker := s.ticker
+		defer s.wg.Done()
+		defer s.keepaliveCheckTicker.Stop()
 
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			case <-ticker.C:
-				s.mu.RLock()
-				lastTime := s.lastKeepalive
-				s.mu.RUnlock()
-
-				now := time.Now()
-				elapsed := now.Sub(lastTime)
-
-				// Check if we need to send keepalive (more than TTL seconds since last)
-				if elapsed >= time.Duration(ttl)*time.Second {
-					s.mu.Lock()
-					s.lastKeepalive = time.Now()
-					s.mu.Unlock()
-
-					s.redisClient.Set(ctx, s.keepaliveKey, "true", time.Duration(ttl)*time.Second)
-				}
+			case <-s.keepaliveCheckTicker.C:
+				s.checkKeepalive(ctx, ttl)
 			}
 		}
 	}()
 }
 
-// handleWebpageKeepalive handles POST /webpage-keepalive
-func (s *Server) handleWebpageKeepalive(w http.ResponseWriter, r *http.Request) {
+// checkKeepalive marks the webpage as disconnected if the last heartbeat is older than ttl.
+func (s *Server) checkKeepalive(ctx context.Context, ttl time.Duration) {
+	opCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+
+	lastHeartbeat, err := s.redisClient.Get(opCtx, s.cfg.LastHeartbeatKey).Int64()
+	switch {
+	case errors.Is(err, redis.Nil):
+		return
+	case errors.Is(err, context.Canceled):
+		return
+	case err != nil:
+		log.Err(err).Msg("Failed to read last heartbeat from Redis")
+		return
+	}
+
+	if time.Since(time.Unix(lastHeartbeat, 0)) <= ttl {
+		return
+	}
+
+	if err := s.redisClient.Set(opCtx, s.keepaliveKey, false, 0).Err(); err != nil && !errors.Is(err, context.Canceled) {
+		log.Err(err).Msg("Failed to mark webpage keepalive as false in Redis")
+	}
+}
+
+// handleWebpageHeartbeat handles POST /webpage-keepalive
+func (s *Server) handleWebpageHeartbeat(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	_, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
-	// TODO: This lol
+	err := s.redisClient.Set(ctx, s.cfg.LastHeartbeatKey, time.Now().Unix(), 0).Err()
+	if err != nil {
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "failed to write heartbeat timestamp to redis: %v", err)
+		return
+	}
+
+	err = s.redisClient.Set(ctx, s.cfg.WebpageKeepaliveKey, true, 0).Err()
+	if err != nil {
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "failed to write webpage keepalive to redis: %v", err)
+		return
+	}
 
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
@@ -147,41 +120,46 @@ func (s *Server) handleWebpageStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
-	// TODO: convert this to just "Get + handle not found error explicitly"
 	// Get OpenAI text generator status
 	var openaiStatus OpenAITextGeneratorStatus
-	openaiExists, err := s.redisClient.Exists(ctx, s.cfg.RedisStatusOutputName).Result()
-	if err != nil {
-		log.Err(err).Msg("Failed to check OpenAI status key")
-		openaiStatus.Status = "error"
-		openaiStatus.AsOf = time.Now().Unix()
-	} else if openaiExists > 0 {
-		statusData, err := s.redisClient.Get(ctx, s.cfg.RedisStatusOutputName).Bytes()
-		if err != nil {
-			openaiStatus.Status = "error"
-			openaiStatus.AsOf = time.Now().Unix()
-		} else {
-			err = json.Unmarshal(statusData, &openaiStatus)
-			if err != nil {
-				log.Err(err).Msg("Failed to parse OpenAI status")
-				openaiStatus.Status = "error"
-				openaiStatus.AsOf = time.Now().Unix()
-			}
-		}
-	} else {
+	statusData, err := s.redisClient.Get(ctx, s.cfg.RedisStatusOutputName).Bytes()
+	switch {
+	case err == redis.Nil:
 		openaiStatus.Status = "unknown"
 		openaiStatus.AsOf = time.Now().Unix()
+	case err != nil:
+		log.Err(err).Msg("Failed to get OpenAI status key")
+		openaiStatus.Status = "error"
+		openaiStatus.AsOf = time.Now().Unix()
+	default:
+		if err := json.Unmarshal(statusData, &openaiStatus); err != nil {
+			log.Err(err).Msg("Failed to parse OpenAI status")
+			openaiStatus.Status = "error"
+			openaiStatus.AsOf = time.Now().Unix()
+		}
 	}
 
 	// Get Qwen TTS speaker status
-	// lmao what
-	// TODO: this
 	var qwenStatus QwenTTSSpeakerStatus
-	qwenStatus.Status = "unknown"
-	qwenStatus.AsOf = time.Now().Unix()
+	qwenData, err := s.redisClient.Get(ctx, s.cfg.QwenTTSSpeakerKey).Bytes()
+	switch {
+	case err == redis.Nil:
+		qwenStatus.Status = "unknown"
+		qwenStatus.AsOf = time.Now().Unix()
+	case err != nil:
+		log.Err(err).Msg("Failed to get Qwen TTS speaker status key")
+		qwenStatus.Status = "error"
+		qwenStatus.AsOf = time.Now().Unix()
+	default:
+		if err := json.Unmarshal(qwenData, &qwenStatus); err != nil {
+			log.Err(err).Msg("Failed to parse Qwen TTS speaker status")
+			qwenStatus.Status = "error"
+			qwenStatus.AsOf = time.Now().Unix()
+		}
+	}
 
 	statusResp := StatusResponse{
 		OpenAITextGeneratorStatus: openaiStatus,
@@ -212,7 +190,7 @@ func (s *Server) handleUpdateSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
 	// Update session info with voice and prompt IDs
@@ -223,7 +201,7 @@ func (s *Server) handleUpdateSession(w http.ResponseWriter, r *http.Request) {
 		PromptID: prompt,
 	}
 
-	statusData, err := json.Marshal(sessionInfo)
+	statusData, err := jsonMarshal(sessionInfo)
 	if err != nil {
 		log.Err(err).Msg("Failed to marshal session info")
 		http.Error(w, "Marshal error", http.StatusInternalServerError)
@@ -259,7 +237,7 @@ func (s *Server) handleSpeechOptions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
 	// Fetch voice options from Redis
@@ -324,30 +302,77 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	cfg := config{}
-	err := env.Parse(&cfg)
-	if err != nil {
+	if err := env.Parse(&cfg); err != nil {
 		log.Panic().Msgf("Failed to parse env config: %+v", err)
 	}
+
+	// Root context — canceled on SIGINT/SIGTERM. Everything downstream (background
+	// goroutines, in-flight HTTP handlers, Redis calls) observes this cancellation.
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 
 	server, err := NewServer(&cfg)
 	if err != nil {
 		log.Panic().Err(err).Msg("Failed to create server")
 	}
 
-	// Start keepalive monitor
-	ctx := context.Background()
 	server.startKeepaliveMonitor(ctx, cfg.KeepaliveTTL)
 
-	// Set up HTTP routes
-	http.HandleFunc("/webpage-keepalive", server.handleWebpageKeepalive)
-	http.HandleFunc("/webpage_status.json", server.handleWebpageStatus)
-	http.HandleFunc("/update_session", server.handleUpdateSession)
-	http.HandleFunc("/speech_options", server.handleSpeechOptions)
-	http.HandleFunc("/health", server.handleHealth)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/webpage-keepalive", server.handleWebpageHeartbeat)
+	mux.HandleFunc("/webpage_status.json", server.handleWebpageStatus)
+	mux.HandleFunc("/update_session", server.handleUpdateSession)
+	mux.HandleFunc("/speech_options", server.handleSpeechOptions)
+	mux.HandleFunc("/health", server.handleHealth)
 
-	addr := "0.0.0.0:8888"
-	log.Info().Msgf("Starting HTTP server on %s", addr)
-	if err := http.ListenAndServe(addr, nil); err != nil {
-		log.Panic().Err(err).Msg("Failed to start HTTP server")
+	httpServer := &http.Server{
+		Addr:              "0.0.0.0:8888",
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+		// BaseContext ties every request's r.Context() to the root context, so
+		// signal cancellation flows through in-flight handlers too.
+		BaseContext: func(_ net.Listener) context.Context { return ctx },
 	}
+
+	serverErr := make(chan error, 1)
+	go func() {
+		log.Info().Msgf("Starting HTTP server on %s", httpServer.Addr)
+		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serverErr <- err
+		}
+		close(serverErr)
+	}()
+
+	select {
+	case <-ctx.Done():
+		log.Info().Msg("Shutdown signal received, draining connections (send signal again to force exit)")
+	case err := <-serverErr:
+		if err != nil {
+			log.Err(err).Msg("HTTP server failed")
+		}
+	}
+
+	// Arm the panic button: a second signal during drain exits immediately.
+	// stop() from signal.NotifyContext already reset the handler, so re-register.
+	forceExit := make(chan os.Signal, 1)
+	signal.Notify(forceExit, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-forceExit
+		log.Warn().Msg("Second signal received, forcing exit")
+		os.Exit(1)
+	}()
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := httpServer.Shutdown(shutdownCtx); err != nil {
+		log.Err(err).Msg("HTTP server graceful shutdown failed")
+	}
+
+	server.wg.Wait()
+
+	if err := server.redisClient.Close(); err != nil {
+		log.Err(err).Msg("Failed to close Redis client")
+	}
+
+	log.Info().Msg("Shutdown complete")
 }
